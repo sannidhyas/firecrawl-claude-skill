@@ -35,18 +35,18 @@ Stack (8 containers):
 
 ## Commands
 
-Wrapper script at `${CLAUDE_PLUGIN_ROOT}/skills/fireclaude/scripts/fc` (symlink or add to PATH after install).
+Wrapper script at `${CLAUDE_PLUGIN_ROOT}/skills/fireclaude/scripts/fc` (invoked via the `fireclaude` npm binary after install).
 
 | Action | Command |
 |---|---|
-| Single scrape | `fc scrape <url> [--format markdown\|html\|links\|screenshot]` |
-| Batch scrape | `fc batch <urls.txt> [--out dataset.jsonl]` |
-| Search web (SearxNG) | `fc search "<query>" [--limit N]` |
-| Map site URLs | `fc map <url>` |
-| Crawl site | `fc crawl <url> [--limit N] [--out dir]` |
-| Health | `fc health` |
-| Stack status | `fc status` |
-| Stack logs | `fc logs [api\|playwright-service\|searxng\|ollama]` |
+| Single scrape | `fireclaude scrape <url> [--format markdown\|html\|links\|screenshot]` |
+| Batch scrape | `fireclaude batch <urls.txt> [--out dataset.jsonl]` |
+| Search web (SearxNG) | `fireclaude search "<query>" [--limit N]` |
+| Map site URLs | `fireclaude map <url>` |
+| Crawl site | `fireclaude crawl <url> [--limit N] [--out dir]` |
+| Health | `fireclaude health` |
+| Stack status | `fireclaude status` |
+| Stack logs | `fireclaude logs [api\|playwright-service\|searxng\|ollama]` |
 
 ## Dataset pipeline
 

@@ -8,15 +8,21 @@ Stack: Firecrawl API + Playwright (stealth) + SearxNG (search) + Ollama (llama3.
 
 ```bash
 npm install -g fireclaude
-fc setup
+fireclaude setup
 ```
 
-`fc setup` clones firecrawl, applies patches, builds Docker images, pulls the Ollama model, and runs smoke tests. Takes 5–15 min on first run. The running stack uses ~4 GB RAM and ~8 GB disk.
+`fireclaude setup` clones firecrawl, applies patches, builds Docker images, pulls the Ollama model, and runs smoke tests. Takes 5–15 min on first run. The running stack uses ~4 GB RAM and ~8 GB disk.
 
 Override install location or model:
 ```bash
-fc setup --install-dir /opt/firecrawl --model qwen2.5:7b
+fireclaude setup --install-dir /opt/firecrawl --model qwen2.5:7b
 ```
+
+**Optional short alias:** if you prefer typing `fc`, run:
+```bash
+fireclaude alias install
+```
+This writes `alias fc='fireclaude'` to `~/.bashrc` / `~/.zshrc`. Remove with `fireclaude alias uninstall`.
 
 ## Claude Code plugin install
 
@@ -37,30 +43,32 @@ The skill activates automatically when you ask Claude to scrape, crawl, search t
 
 | Command | Description |
 |---|---|
-| `fc setup [--install-dir PATH] [--model NAME]` | First-run bootstrap — clone, patch, build, start stack |
-| `fc start` | Start stopped containers |
-| `fc stop` | Stop running containers |
-| `fc status [--json]` | Container status. `--json` → array of `{service, state}` |
-| `fc teardown [--purge]` | Stop + remove stack. `--purge` auto-answers yes to all prompts |
-| `fc upgrade [--sha GIT_SHA]` | Pull latest fireclaude npm, optionally pin firecrawl to SHA, rebuild, restart |
-| `fc version` | fireclaude version + installed firecrawl SHA + ollama models |
-| `fc doctor [--json]` | Dep check + container health + model presence. `--json` for agent use |
+| `fireclaude setup [--install-dir PATH] [--model NAME]` | First-run bootstrap — clone, patch, build, start stack |
+| `fireclaude start` | Start stopped containers |
+| `fireclaude stop` | Stop running containers |
+| `fireclaude status [--json]` | Container status. `--json` → array of `{service, state}` |
+| `fireclaude teardown [--purge]` | Stop + remove stack. `--purge` auto-answers yes to all prompts |
+| `fireclaude upgrade [--sha GIT_SHA]` | Pull latest fireclaude npm, optionally pin firecrawl to SHA, rebuild, restart |
+| `fireclaude version` | fireclaude version + installed firecrawl SHA + ollama models |
+| `fireclaude doctor [--json]` | Dep check + container health + model presence. `--json` for agent use |
+| `fireclaude alias install [--yes]` | Write `alias fc='fireclaude'` to `~/.bashrc` / `~/.zshrc` |
+| `fireclaude alias uninstall [--yes]` | Remove the alias from shell rc files |
 
 ### Data
 
 | Command | Description |
 |---|---|
-| `fc scrape <url> [--format markdown\|html\|links\|screenshot] [--raw] [--json]` | Scrape single URL |
-| `fc batch <urls.txt> [--out dataset.jsonl] [--format markdown] [--json]` | Batch scrape URL list → JSONL |
-| `fc search "<query>" [--limit N] [--json]` | Web search via SearxNG |
-| `fc map <url> [--json]` | Map all URLs on a site |
-| `fc crawl <url> [--limit N] [--out dir] [--json]` | Crawl site → markdown files |
-| `fc extract <url> --schema <file.json> [--prompt STR] [--json]` | JSON-schema extract via Ollama |
-| `fc changes <url> [--diff] [--json]` | Change tracking against SQLite baseline |
-| `fc webhook-listen [--port N] [--json]` | Ephemeral HTTP receiver, logs POSTs as JSON lines |
-| `fc model list\|pull\|swap\|current` | Manage Ollama models |
-| `fc health` | API reachability check |
-| `fc logs [service]` | Tail container logs |
+| `fireclaude scrape <url> [--format markdown\|html\|links\|screenshot] [--raw] [--json]` | Scrape single URL |
+| `fireclaude batch <urls.txt> [--out dataset.jsonl] [--format markdown] [--json]` | Batch scrape URL list → JSONL |
+| `fireclaude search "<query>" [--limit N] [--json]` | Web search via SearxNG |
+| `fireclaude map <url> [--json]` | Map all URLs on a site |
+| `fireclaude crawl <url> [--limit N] [--out dir] [--json]` | Crawl site → markdown files |
+| `fireclaude extract <url> --schema <file.json> [--prompt STR] [--json]` | JSON-schema extract via Ollama |
+| `fireclaude changes <url> [--diff] [--json]` | Change tracking against SQLite baseline |
+| `fireclaude webhook-listen [--port N] [--json]` | Ephemeral HTTP receiver, logs POSTs as JSON lines |
+| `fireclaude model list\|pull\|swap\|current` | Manage Ollama models |
+| `fireclaude health` | API reachability check |
+| `fireclaude logs [service]` | Tail container logs |
 
 ## Agentic use
 
@@ -68,28 +76,28 @@ Agent-safe JSON endpoints:
 
 ```bash
 # Dep + health check — returns {deps, containers, models}
-fc doctor --json | jq '.deps.docker'
+fireclaude doctor --json | jq '.deps.docker'
 
 # Container status — returns [{service, state}, ...]
-fc status --json | jq 'length'
+fireclaude status --json | jq 'length'
 
 # Scrape
-fc scrape https://example.com --json | jq '.data.markdown'
+fireclaude scrape https://example.com --json | jq '.data.markdown'
 
 # Search
-fc search "rust async runtime" --limit 5 --json | jq '.data[].url'
+fireclaude search "rust async runtime" --limit 5 --json | jq '.data[].url'
 
 # Map a site
-fc map https://docs.anthropic.com --json | jq '.links | length'
+fireclaude map https://docs.anthropic.com --json | jq '.links | length'
 
 # Extract structured data
-fc extract https://news.ycombinator.com \
+fireclaude extract https://news.ycombinator.com \
   --schema schema.json \
   --prompt "Extract the top 3 story titles and URLs" \
   --json | jq '.data.json'
 
 # Change tracking
-fc changes https://example.com --json
+fireclaude changes https://example.com --json
 # → {"url":"...","changed":false,"current_hash":"...","diff_bytes":0,"scraped_at":...}
 ```
 
@@ -108,7 +116,7 @@ cat > schema.json <<'EOF'
 }
 EOF
 
-fc extract https://news.ycombinator.com \
+fireclaude extract https://news.ycombinator.com \
   --schema schema.json \
   --prompt "Extract the top story." \
   --json | jq '.data.json'
@@ -119,19 +127,19 @@ Routes through the `ollama` container (llama3.2:3b by default). First request co
 ## Model swap
 
 ```bash
-fc model list
-fc model pull qwen2.5:7b
-fc model swap qwen2.5:7b
-fc model current
+fireclaude model list
+fireclaude model pull qwen2.5:7b
+fireclaude model swap qwen2.5:7b
+fireclaude model current
 ```
 
 ## Change tracking
 
 ```bash
-fc changes https://example.com          # first run → changed
-fc changes https://example.com          # second run → unchanged
-fc changes https://example.com --diff   # show unified diff
-fc changes https://example.com --json   # agent-friendly output
+fireclaude changes https://example.com          # first run → changed
+fireclaude changes https://example.com          # second run → unchanged
+fireclaude changes https://example.com --diff   # show unified diff
+fireclaude changes https://example.com --json   # agent-friendly output
 ```
 
 Change history stored in SQLite at `~/.fireclaude/changes.db` (override with `CHANGES_DB_PATH`).
@@ -139,11 +147,11 @@ Change history stored in SQLite at `~/.fireclaude/changes.db` (override with `CH
 ## Webhook testing
 
 ```bash
-fc webhook-listen --json &
+fireclaude webhook-listen --json &
 # Each POST to :4321/webhook emits a JSON line:
 # {"timestamp":"...","method":"POST","path":"/webhook","headers":{...},"body":{...}}
 
-fc webhook-listen --port 9999
+fireclaude webhook-listen --port 9999
 ```
 
 ## Turnstile / CAPTCHA solver (optional)
@@ -182,8 +190,8 @@ Six `git diff` patches in `docker/patches/` are applied against firecrawl SHA `0
 ## Uninstall
 
 ```bash
-fc teardown           # stop + prompt to remove clone + volumes
-fc teardown --purge   # stop + remove everything without prompts
+fireclaude teardown           # stop + prompt to remove clone + volumes
+fireclaude teardown --purge   # stop + remove everything without prompts
 ```
 
 ## Contributing
@@ -207,7 +215,7 @@ If you don't have Node.js / npm:
 
 ```bash
 # pinned release
-curl -sSL https://raw.githubusercontent.com/sannidhyas/fireclaude/v0.4.0/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/sannidhyas/fireclaude/v0.5.0/install.sh | bash
 
 # or clone first
 git clone https://github.com/sannidhyas/fireclaude

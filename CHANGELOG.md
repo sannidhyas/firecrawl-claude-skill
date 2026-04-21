@@ -6,6 +6,45 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), [Semantic Vers
 
 ---
 
+## [0.5.0] — 2026-04-21 — rename binary to `fireclaude`
+
+**Breaking:** the `fc` binary shipped by npm is renamed to `fireclaude` to avoid
+collision with the bash builtin `fc` (fix-command history editor) and fontconfig
+`/usr/bin/fc` on Linux.
+
+### Changed
+
+- `package.json` `bin` entry: `fc` → `fireclaude` (points to renamed shim `fireclaude-bin.js`).
+- All user-facing CLI usage text updated from `fc <cmd>` to `fireclaude <cmd>`.
+- CI workflow: `FC_BIN` variable renamed to `FIRECLAUDE_BIN`; resolved via `$(npm prefix -g)/bin/fireclaude`.
+- Test harness: `skills/fireclaude/tests/test_fc.sh` → `test_fireclaude.sh`; internal `FC_BIN` → `FIRECLAUDE_BIN`.
+- `package.json` and `.claude-plugin/plugin.json` version bumped to `0.5.0`.
+
+### Added
+
+- **`fireclaude alias install [--yes]`** — writes `alias fc='fireclaude'` to `~/.bashrc` and `~/.zshrc` if present. Prompts before writing; `--yes` auto-confirms. Idempotent.
+- **`fireclaude alias uninstall [--yes]`** — removes the alias lines written by `alias install`.
+
+### Migration
+
+```bash
+npm install -g fireclaude@0.5.0
+# The binary is now `fireclaude`. To keep the short `fc` muscle memory:
+fireclaude alias install
+source ~/.bashrc   # or open a new shell
+fc setup           # works via alias
+```
+
+If you had `fc setup` in scripts, replace with `fireclaude setup`.
+
+### Backward compatible
+
+- `install.sh` curl-bash flow unchanged.
+- All subcommands and flags identical; only the top-level binary name changes.
+- The underlying bash script remains at `skills/fireclaude/scripts/fc` (on-disk name unchanged).
+
+---
+
 ## [0.4.0] — 2026-04-21 — npm-only install flow
 
 ### Added
