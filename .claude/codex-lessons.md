@@ -17,3 +17,8 @@ Lesson: gh repo rename auto-redirects old URLs and preserves tags/issues; mv dir
 Task: Ship fireclaude v0.4.0 — npm-only install flow with fc lifecycle subcommands
 Iters: 1
 Lesson: System `/usr/bin/fc` (shell built-in) shadows npm-installed fc binary; use FC_BIN= or full path in tests. npm `bin` entry with a path containing `/` triggers a cosmetic auto-correct warning but publishes fine.
+
+## 2026-04-21 | codex-debugger | success
+Task: Fix CI PATH shadowing — Ubuntu /usr/bin/fc (fontconfig) shadows npm-installed fc binary
+Iters: 2
+Lesson: Use `npm prefix -g` (not `npm root -g`) to locate the npm bin dir — prefix gives /usr/local directly; root gives node_modules and the ../bin dance fails when realpath exits 1 under set -e before any diagnostics print. test_fc.sh already had FC_BIN=${FC_BIN:-...} fallback; only ci.yml needed fixing. No version bump required for CI-only changes.
