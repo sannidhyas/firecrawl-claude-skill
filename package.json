@@ -1,6 +1,6 @@
 {
   "name": "fireclaude",
-  "version": "0.6.3",
+  "version": "1.0.0-rc1",
   "description": "Self-hosted Firecrawl Claude Code skill — scrape, crawl, search, extract, change tracking, webhook testing, model swap. No API keys.",
   "bin": {
     "fireclaude": "skills/fireclaude/scripts/fireclaude-bin.js"

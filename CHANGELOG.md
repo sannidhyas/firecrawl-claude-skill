@@ -6,9 +6,71 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), [Semantic Vers
 
 ---
 
-## v0.6.1 — 2026-04-21 — fix: ora/chalk ESM crash
+## [1.0.0-rc1] — 2026-04-21 — release candidate
 
-- Downgrade ora → 5.4.1 + chalk → 4.1.2 (last CJS versions) to fix TypeError on `fireclaude setup`.
+First release candidate for 1.0.0 stable. No new features vs 0.6.3. Gate this at
+npm dist-tag `next` for soak testing.
+
+### Promotion checklist (must all pass before `1.0.0` final)
+
+- [ ] CI green on master for ≥3 consecutive runs after this tag
+- [ ] `fireclaude setup` verified on fresh Fedora and one other OS (Ubuntu or macOS)
+- [ ] No P1 issues reported against rc1 during soak window
+- [ ] `MIGRATION-0.x-to-1.0.md` reviewed by at least one external user
+
+### Public API frozen at this point
+
+- Binary name: `fireclaude` (with optional `fc` alias via `fireclaude alias install`)
+- Subcommands: `setup`, `start`, `stop`, `teardown`, `upgrade`, `version`, `doctor`,
+  `status`, `model list|pull`, `ollama-start`, `alias install|uninstall`
+- Env vars: `OLLAMA_MODE` (`auto`|`host`|`container`), `FIRECLAUDE_INSTALL_SH`,
+  `FIRECLAUDE_BIN`, `NO_COLOR`
+- Skill format: `skills/fireclaude/` layout
+- JSON shapes: `doctor --json`, `status --json` (documented in README)
+
+Breaking changes post-1.0 require a major bump.
+
+### Install
+
+```bash
+npm install -g fireclaude@next
+# or, when promoted:
+npm install -g fireclaude
+```
+
+See [MIGRATION-0.x-to-1.0.md](./MIGRATION-0.x-to-1.0.md) for upgrade from 0.x.
+
+---
+
+## [0.6.3] — 2026-04-21 — fix: valid marketplace schema + robust searxng copy
+
+- Rewrite `.claude-plugin/marketplace.json` to match Claude Code marketplace
+  schema (`owner` object + `plugins` array). Previous shape (`skills[]` /
+  `author` / `install`) failed `/plugin marketplace add` with
+  `owner: expected object, received undefined, plugins: expected array, received undefined`.
+- `install.sh` now skips searxng settings copy when content is identical and
+  warns + continues when target is owned by the searxng container UID, instead
+  of aborting with `Permission denied`.
+- Version bumps: `package.json`, `plugin.json`, `package-lock.json` → 0.6.3.
+
+No API changes.
+
+---
+
+## [0.6.2] — 2026-04-21 — chore: sync marketplace + version alignment
+
+- Align `.claude-plugin/marketplace.json`, `.claude-plugin/plugin.json`,
+  `package.json`, `package-lock.json` all at 0.6.2. Marketplace was stuck at
+  0.3.0 while npm/plugin shipped 0.6.1.
+- Refresh marketplace description to match current scope.
+
+No API changes.
+
+---
+
+## [0.6.1] — 2026-04-21 — fix: ora/chalk ESM crash
+
+- Downgrade `ora` → 5.4.1 + `chalk` → 4.1.2 (last CJS versions) to fix TypeError on `fireclaude setup`.
 - No API changes.
 
 ---
