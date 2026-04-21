@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends jq python3 curl
+
+      - name: Bootstrap Firecrawl stack
+        env:
+          FIRECRAWL_INSTALL_DIR: /tmp/fc-ci
+          PORT: 3099
+          INTERNAL_PORT: 3002
+          COMPOSE_PROJECT_NAME: firecrawl_ci
+        run: |
+          bash install.sh
+        timeout-minutes: 20
+
+      - name: Run skill tests
+        env:
+          FIRECRAWL_URL: http://localhost:3099
+          COMPOSE_PROJECT_NAME: firecrawl_ci
+        run: |
+          bash skills/firecrawl/tests/test_fc.sh
+        timeout-minutes: 5
+
+      - name: Tear down stack
+        if: always()
+        env:
+          FIRECRAWL_INSTALL_DIR: /tmp/fc-ci
+          COMPOSE_PROJECT_NAME: firecrawl_ci
+        run: |
+          bash uninstall.sh || true
