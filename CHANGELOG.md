@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), [Semantic Vers
 
 ---
 
+## v0.6.1 — 2026-04-21 — fix: ora/chalk ESM crash
+
+- Downgrade ora → 5.4.1 + chalk → 4.1.2 (last CJS versions) to fix TypeError on `fireclaude setup`.
+- No API changes.
+
+---
+
 ## [0.6.0] — 2026-04-21 — ollama host mode + logo + TUI
 
 - **OLLAMA_MODE** env (`auto`|`host`|`container`). `auto` (default) probes host daemon at `http://localhost:11434`; skips the bundled container when reachable. `host` fails setup if unreachable. `container` preserves previous behaviour.

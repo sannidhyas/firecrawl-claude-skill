@@ -27,3 +27,8 @@ Lesson: Use `npm prefix -g` (not `npm root -g`) to locate the npm bin dir — pr
 Task: Ship fireclaude v0.5.0 — rename npm binary from fc to fireclaude, add alias subcommand
 Iters: 1 (inline; all changes applied directly without codex MCP)
 Lesson: npm warns "script name was invalid and removed" when bin path has ./ prefix — it actually normalizes and publishes correctly; verify with `npm info <pkg> bin`. When a feat + refactor both touch the same single file, there is no clean way to split them across commits — stage the file once and use the larger commit message. The fc bash script is the single source of truth for both binary rename and alias feature.
+
+## 2026-04-21 | codex-do | success
+Task: Ship fireclaude v0.6.0 — OLLAMA_MODE, ollama-start, logo, TUI, doctor update
+Iters: 1 (plus 1 CI fix iteration)
+Lesson: auto mode in model list/pull needs a runtime host-reachability probe — writing OLLAMA_MODE=auto to .env is not enough; the container-vs-host branch must re-probe at command time, not just at setup time.
