@@ -59,6 +59,21 @@ git -C "$FIRECRAWL_INSTALL_DIR" checkout --quiet "$FIRECRAWL_PINNED_SHA" || \
 info "Applying patches..."
 for patch in "$PLUGIN_ROOT/docker/patches/"*.patch; do
   pname=$(basename "$patch")
+  # playwright-turnstile.ts.patch is optional (disabled unless TURNSTILE_SOLVER env is set).
+  # Skip it gracefully if it doesn't apply cleanly so a missing/different target file
+  # does not block the core install.
+  if [[ "$pname" == "playwright-turnstile.ts.patch" ]]; then
+    if git -C "$FIRECRAWL_INSTALL_DIR" apply --check "$patch" >/dev/null 2>&1; then
+      info "  applying $pname (optional Turnstile solver) ..."
+      git -C "$FIRECRAWL_INSTALL_DIR" apply --3way "$patch" 2>&1 || \
+        warn "  $pname failed to apply — Turnstile solver disabled. Set TURNSTILE_SOLVER to enable."
+    elif git -C "$FIRECRAWL_INSTALL_DIR" apply --check --reverse "$patch" >/dev/null 2>&1; then
+      warn "  $pname already applied — skipping."
+    else
+      warn "  $pname cannot be applied (target file may differ) — Turnstile solver disabled."
+    fi
+    continue
+  fi
   info "  applying $pname ..."
   # Try forward apply first
   if git -C "$FIRECRAWL_INSTALL_DIR" apply --check "$patch" >/dev/null 2>&1; then
