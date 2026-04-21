@@ -4,16 +4,16 @@
 
 - **`fc extract <url> --schema <file.json> [--prompt STR] [--json]`** — structured JSON extraction via local Ollama using a JSON Schema file.
 - **`fc model list/pull/swap/current`** — manage Ollama models from the CLI. `swap` rewrites `.env` and hot-reloads the API container.
-- **`fc changes <url> [--diff] [--json]`** — content change tracking backed by SQLite at `~/.firecrawl-claude-skill/changes.db`. Returns hash comparison and optional unified diff.
+- **`fc changes <url> [--diff] [--json]`** — content change tracking backed by SQLite at `~/.fireclaude/changes.db`. Returns hash comparison and optional unified diff.
 - **`fc webhook-listen [--port N] [--json]`** — ephemeral HTTP receiver that emits one JSON line per incoming POST. Useful for testing Firecrawl webhook callbacks.
 - **`--json` flag** on all existing subcommands (`scrape`, `search`, `map`, `crawl`, `batch`) — returns full raw API response for agent-friendly piping.
 
 ## Infrastructure
 
-- **`marketplace.json`** — `/plugin marketplace add sannidhyas/firecrawl-claude-skill` now works.
-- **`package.json`** — `npm install -g firecrawl-claude-skill` installs the `fc` binary globally.
+- **`marketplace.json`** — `/plugin marketplace add sannidhyas/fireclaude` now works.
+- **`package.json`** — `npm install -g fireclaude` installs the `fc` binary globally.
 - **GitHub Actions CI** — `ubuntu-latest`, installs stack, runs `test_fc.sh` (9 tests), tears down. Concurrency cancel-in-progress per branch.
-- **9-test skill harness** at `skills/firecrawl/tests/test_fc.sh` covering all subcommands.
+- **9-test skill harness** at `skills/fireclaude/tests/test_fc.sh` covering all subcommands.
 
 ## Optional / disabled by default
 

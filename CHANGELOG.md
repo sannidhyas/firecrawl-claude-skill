@@ -6,6 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), [Semantic Vers
 
 ---
 
+## [0.3.0] — 2026-04-21 — rename to Fireclaude
+
+### Changed
+
+- Project renamed from `firecrawl-claude-skill` to `fireclaude` (portmanteau of Firecrawl + Claude).
+- GitHub repo moved to `sannidhyas/fireclaude` (old URL redirects automatically).
+- npm package is now `fireclaude`; old `firecrawl-claude-skill` deprecated (still on registry for existing installs).
+- Skill directory: `skills/firecrawl/` → `skills/fireclaude/`.
+- Install dir default: `~/.firecrawl-claude-skill/` → `~/.fireclaude/`.
+- No behavior changes. All v0.2.0 features carry forward.
+
+---
+
 ## [0.2.0] — 2026-04-21
 
 ### Added
@@ -15,24 +28,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), [Semantic Vers
 - **`fc model pull <name>`** — pull a model into the ollama container.
 - **`fc model swap <name>`** — pull model, rewrite `MODEL_NAME` in `.env`, recreate API container, wait for health.
 - **`fc model current`** — print the effective `MODEL_NAME` from `.env`.
-- **`fc changes <url> [--diff] [--json]`** — scrape + compare content hash against last known value in SQLite (`~/.firecrawl-claude-skill/changes.db`). `--diff` shows unified diff. `--json` returns structured result.
+- **`fc changes <url> [--diff] [--json]`** — scrape + compare content hash against last known value in SQLite (`~/.fireclaude/changes.db`). `--diff` shows unified diff. `--json` returns structured result.
 - **`fc webhook-listen [--port N] [--json]`** — ephemeral HTTP server that logs each incoming POST as a JSON line on stdout. Default port 4321. Ctrl+C to stop.
 - **`--json` flag** on all existing subcommands (`scrape`, `search`, `map`, `crawl`, `batch`) — returns full API response as JSON instead of extracted human-friendly output.
 - **`fc-changes.py`** — Python helper for change tracking with SQLite backend.
 - **`fc-webhook-listen.py`** — Python webhook receiver using `http.server`.
 - **`docker/patches/playwright-turnstile.ts.patch`** — optional Turnstile/CAPTCHA solver patch. Disabled by default; enabled by setting `TURNSTILE_SOLVER` + `TURNSTILE_SOLVER_API_KEY` env vars. Supports CapMonster and 2captcha backends.
 - **`docker/env.example`** additions: residential proxy block, Turnstile solver block, change tracking DB path, webhook URL + HMAC secret.
-- **`skills/firecrawl/tests/test_fc.sh`** — bash test harness: 9 test cases covering all new and existing subcommands.
-- **`skills/firecrawl/tests/fixtures/example-schema.json`** — fixture JSON schema for extract tests.
-- **`.claude-plugin/marketplace.json`** — Claude Code marketplace metadata so `/plugin marketplace add sannidhyas/firecrawl-claude-skill` works.
-- **`package.json`** at repo root — npm package `firecrawl-claude-skill` exposing `fc` binary globally.
+- **`skills/fireclaude/tests/test_fc.sh`** — bash test harness: 9 test cases covering all new and existing subcommands.
+- **`skills/fireclaude/tests/fixtures/example-schema.json`** — fixture JSON schema for extract tests.
+- **`.claude-plugin/marketplace.json`** — Claude Code marketplace metadata so `/plugin marketplace add sannidhyas/fireclaude` works.
+- **`package.json`** at repo root — npm package `fireclaude` exposing `fc` binary globally.
 - **`.github/workflows/ci.yml`** — GitHub Actions CI: install stack on ubuntu-latest, run `test_fc.sh`, tear down. Concurrency cancel-in-progress per ref.
 - **`CONTRIBUTING.md`**, **`SECURITY.md`**, GitHub issue templates, PR template.
 
 ### Changed
 
 - `fc` usage text updated to list all new subcommands.
-- `install.sh` creates `$HOME/.firecrawl-claude-skill/` dir for changes DB.
+- `install.sh` creates `$HOME/.fireclaude/` dir for changes DB.
 - `README.md` — new sections: Agentic use, Model swap (fc CLI), Change tracking, Webhook testing, Marketplace install, npm install.
 
 ### Backward compatible
