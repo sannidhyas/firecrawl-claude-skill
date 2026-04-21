@@ -35,24 +35,23 @@ jobs:
       - name: Install fireclaude from local checkout
         run: npm install -g ./
 
-      - name: Resolve and verify FC_BIN
+      - name: Resolve and verify FIRECLAUDE_BIN
         run: |
           # npm prefix -g gives the installation prefix (e.g. /usr/local).
           # npm places bin symlinks at <prefix>/bin — this is stable across npm versions.
           NPM_PREFIX="$(npm prefix -g)"
-          FC_BIN="${NPM_PREFIX}/bin/fc"
+          FIRECLAUDE_BIN="${NPM_PREFIX}/bin/fireclaude"
 
-          echo "--- PATH shadowing diagnostics ---"
-          echo "which fc        : $(which fc 2>/dev/null || echo '(not in PATH)')"
-          echo "type -a fc      : $(type -a fc 2>/dev/null || echo '(not found)')"
-          echo "npm prefix -g   : ${NPM_PREFIX}"
-          echo "FC_BIN          : ${FC_BIN}"
-          ls -la "${FC_BIN}" || { echo "ERROR: FC_BIN not found at ${FC_BIN}"; exit 1; }
-          # Confirm the symlink target is our Node shim, not fontconfig
-          FC_REAL="$(readlink -f "${FC_BIN}")"
-          echo "FC_BIN realpath : ${FC_REAL}"
-          head -1 "${FC_REAL}" | grep -q node || { echo "ERROR: FC_BIN target does not look like a Node shim (head: $(head -1 "${FC_REAL}"))"; exit 1; }
-          echo "FC_BIN=${FC_BIN}" >> "$GITHUB_ENV"
+          echo "--- PATH diagnostics ---"
+          echo "which fireclaude    : $(which fireclaude 2>/dev/null || echo '(not in PATH)')"
+          echo "npm prefix -g       : ${NPM_PREFIX}"
+          echo "FIRECLAUDE_BIN      : ${FIRECLAUDE_BIN}"
+          ls -la "${FIRECLAUDE_BIN}" || { echo "ERROR: FIRECLAUDE_BIN not found at ${FIRECLAUDE_BIN}"; exit 1; }
+          # Confirm the symlink target is our Node shim
+          FC_REAL="$(readlink -f "${FIRECLAUDE_BIN}")"
+          echo "FIRECLAUDE_BIN realpath : ${FC_REAL}"
+          head -1 "${FC_REAL}" | grep -q node || { echo "ERROR: FIRECLAUDE_BIN target does not look like a Node shim (head: $(head -1 "${FC_REAL}"))"; exit 1; }
+          echo "FIRECLAUDE_BIN=${FIRECLAUDE_BIN}" >> "$GITHUB_ENV"
 
       - name: Bootstrap Firecrawl stack
         env:
@@ -61,7 +60,7 @@ jobs:
           INTERNAL_PORT: 3002
           COMPOSE_PROJECT_NAME: firecrawl_ci
         run: |
-          "$FC_BIN" setup --install-dir /tmp/fc-ci --model llama3.2:3b
+          "$FIRECLAUDE_BIN" setup --install-dir /tmp/fc-ci --model llama3.2:3b
         timeout-minutes: 20
 
       - name: Assert stack is healthy
@@ -70,7 +69,7 @@ jobs:
           FIRECRAWL_INSTALL_DIR: /tmp/fc-ci
           COMPOSE_PROJECT_NAME: firecrawl_ci
         run: |
-          STATUS_JSON=$("$FC_BIN" status --json 2>/dev/null || echo "[]")
+          STATUS_JSON=$("$FIRECLAUDE_BIN" status --json 2>/dev/null || echo "[]")
           STATUS_LEN=$(echo "$STATUS_JSON" | jq 'length')
           echo "Stack services reported: ${STATUS_LEN}"
           echo "$STATUS_JSON" | jq .
@@ -86,7 +85,7 @@ jobs:
           FIRECRAWL_INSTALL_DIR: /tmp/fc-ci
           COMPOSE_PROJECT_NAME: firecrawl_ci
         run: |
-          bash skills/fireclaude/tests/test_fc.sh
+          bash skills/fireclaude/tests/test_fireclaude.sh
         timeout-minutes: 5
 
       - name: Tear down stack
@@ -95,4 +94,4 @@ jobs:
           FIRECRAWL_INSTALL_DIR: /tmp/fc-ci
           COMPOSE_PROJECT_NAME: firecrawl_ci
         run: |
-          "$FC_BIN" teardown --purge || bash uninstall.sh || true
+          "$FIRECLAUDE_BIN" teardown --purge || bash uninstall.sh || true
