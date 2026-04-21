@@ -35,6 +35,25 @@ jobs:
       - name: Install fireclaude from local checkout
         run: npm install -g ./
 
+      - name: Resolve and verify FC_BIN
+        run: |
+          # npm bin -g was removed in npm 7+. Derive the bin dir from the global root.
+          # npm places bin symlinks at <prefix>/bin which is one level above node_modules.
+          NPM_GLOBAL_ROOT="$(npm root -g)"
+          FC_BIN="${NPM_GLOBAL_ROOT}/../bin/fc"
+          # Canonicalise the path (resolves ../ segments)
+          FC_BIN="$(realpath "$FC_BIN" 2>/dev/null || readlink -f "$FC_BIN")"
+
+          echo "--- PATH shadowing diagnostics ---"
+          echo "which fc        : $(which fc 2>/dev/null || echo '(not in PATH)')"
+          echo "type fc         : $(type fc 2>/dev/null || echo '(not found)')"
+          echo "npm root -g     : ${NPM_GLOBAL_ROOT}"
+          echo "FC_BIN resolved : ${FC_BIN}"
+          ls -la "${FC_BIN}" || { echo "ERROR: FC_BIN not found at ${FC_BIN}"; exit 1; }
+          # Confirm the file is our shim, not fontconfig
+          head -1 "${FC_BIN}" | grep -q node || { echo "ERROR: FC_BIN does not look like a Node shim"; exit 1; }
+          echo "FC_BIN=${FC_BIN}" >> "$GITHUB_ENV"
+
       - name: Bootstrap Firecrawl stack
         env:
           FIRECRAWL_INSTALL_DIR: /tmp/fc-ci
@@ -42,8 +61,24 @@ jobs:
           INTERNAL_PORT: 3002
           COMPOSE_PROJECT_NAME: firecrawl_ci
         run: |
-          fc setup --install-dir /tmp/fc-ci --model llama3.2:3b
+          "$FC_BIN" setup --install-dir /tmp/fc-ci --model llama3.2:3b
         timeout-minutes: 20
+
+      - name: Assert stack is healthy
+        env:
+          FIRECRAWL_URL: http://localhost:3099
+          FIRECRAWL_INSTALL_DIR: /tmp/fc-ci
+          COMPOSE_PROJECT_NAME: firecrawl_ci
+        run: |
+          STATUS_JSON=$("$FC_BIN" status --json 2>/dev/null || echo "[]")
+          STATUS_LEN=$(echo "$STATUS_JSON" | jq 'length')
+          echo "Stack services reported: ${STATUS_LEN}"
+          echo "$STATUS_JSON" | jq .
+          if [[ "${STATUS_LEN}" -lt 7 ]]; then
+            echo "ERROR: stack came up with fewer than 7 services (got ${STATUS_LEN})."
+            echo "Check the Bootstrap step logs above for install.sh failures."
+            exit 1
+          fi
 
       - name: Run skill tests
         env:
@@ -60,4 +95,4 @@ jobs:
           FIRECRAWL_INSTALL_DIR: /tmp/fc-ci
           COMPOSE_PROJECT_NAME: firecrawl_ci
         run: |
-          fc teardown --purge || bash uninstall.sh || true
+          "$FC_BIN" teardown --purge || bash uninstall.sh || true

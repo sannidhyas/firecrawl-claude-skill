@@ -12,3 +12,8 @@ Lesson: Optional patches that target non-existent files must be skipped with war
 Task: Rename firecrawl-claude-skill → fireclaude (GitHub, local dir, source, npm v0.3.0)
 Iters: 1 (inline, no codex MCP)
 Lesson: gh repo rename auto-redirects old URLs and preserves tags/issues; mv dir then git remote set-url is sufficient — no re-clone needed; Read tool tracks files by absolute path so must re-read at new path after mv before Edit/Write; npm publish auto-corrects bin key names and normalizes repository URL (warn is harmless); npm view 404 immediately after publish is normal registry propagation latency (~10s).
+
+## 2026-04-21 | codex-do | success
+Task: Ship fireclaude v0.4.0 — npm-only install flow with fc lifecycle subcommands
+Iters: 1
+Lesson: System `/usr/bin/fc` (shell built-in) shadows npm-installed fc binary; use FC_BIN= or full path in tests. npm `bin` entry with a path containing `/` triggers a cosmetic auto-correct warning but publishes fine.
