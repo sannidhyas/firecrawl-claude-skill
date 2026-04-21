@@ -757,9 +757,19 @@ cmd_model() {
   # Base URL without /api suffix for raw API calls
   local ollama_base="${ollama_url%/api}"
 
+  # Resolve effective mode: auto → check host reachability at runtime
+  local effective_mode="$mode"
+  if [[ "$mode" == "auto" ]]; then
+    if _ollama_host_reachable; then
+      effective_mode="host"
+    else
+      effective_mode="container"
+    fi
+  fi
+
   case "$sub" in
     list)
-      if [[ "$mode" == "container" ]]; then
+      if [[ "$effective_mode" == "container" ]]; then
         docker exec "$OLLAMA_CONTAINER" ollama list | tail -n +2 | awk '{print $1}' | jq -Rn '[inputs]'
       else
         curl -sf --max-time 10 "$ollama_base/api/tags" 2>/dev/null \
@@ -769,7 +779,7 @@ cmd_model() {
     pull)
       [[ $# -ge 1 ]] || die "model pull needs <name>"
       local model_name="$1"
-      if [[ "$mode" == "container" ]]; then
+      if [[ "$effective_mode" == "container" ]]; then
         docker exec "$OLLAMA_CONTAINER" ollama pull "$model_name"
       else
         echo "Pulling $model_name via host ollama at $ollama_base ..." >&2
@@ -785,7 +795,7 @@ cmd_model() {
       local env_file="$fc_repo/.env"
       [[ -f "$env_file" ]] || die "no .env at $env_file"
       echo "Pulling $name ..." >&2
-      if [[ "$mode" == "container" ]]; then
+      if [[ "$effective_mode" == "container" ]]; then
         docker exec "$OLLAMA_CONTAINER" ollama pull "$name"
       else
         curl -sS -X POST "$ollama_base/api/pull" \
