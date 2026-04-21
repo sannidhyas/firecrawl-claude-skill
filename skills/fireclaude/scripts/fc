@@ -16,7 +16,7 @@ _resolve_install_dir() {
   elif [[ -d "$HOME/.fireclaude/firecrawl" ]]; then
     echo "$HOME/.fireclaude/firecrawl"
   else
-    die "install dir not found. Run 'fc setup' first, or set FIRECRAWL_INSTALL_DIR."
+    die "install dir not found. Run 'fireclaude setup' first, or set FIRECRAWL_INSTALL_DIR."
   fi
 }
 
@@ -118,35 +118,37 @@ need jq
 
 usage() {
   cat <<EOF
-fc - Firecrawl self-host wrapper  (fireclaude v$(_plugin_version 2>/dev/null || echo '?'))
+fireclaude - Firecrawl self-host wrapper  (fireclaude v$(_plugin_version 2>/dev/null || echo '?'))
 
 Lifecycle:
-  fc setup [--install-dir PATH] [--model NAME]   bootstrap stack (runs install.sh)
-  fc start                                        start stopped containers
-  fc stop                                         stop running containers
-  fc status [--json]                              container status
-  fc teardown [--purge]                           stop + remove stack (--purge skips prompts)
-  fc upgrade [--sha GIT_SHA]                      pull latest fireclaude, rebuild, restart
-  fc version                                      fireclaude version + firecrawl SHA + models
-  fc doctor [--json]                              dep check + container health + model presence
+  fireclaude setup [--install-dir PATH] [--model NAME]   bootstrap stack (runs install.sh)
+  fireclaude start                                        start stopped containers
+  fireclaude stop                                         stop running containers
+  fireclaude status [--json]                              container status
+  fireclaude teardown [--purge]                           stop + remove stack (--purge skips prompts)
+  fireclaude upgrade [--sha GIT_SHA]                      pull latest fireclaude, rebuild, restart
+  fireclaude version                                      fireclaude version + firecrawl SHA + models
+  fireclaude doctor [--json]                              dep check + container health + model presence
+  fireclaude alias install [--yes]                        write alias fc='fireclaude' to ~/.bashrc / ~/.zshrc
+  fireclaude alias uninstall [--yes]                      remove the alias from shell rc files
 
 Data commands:
-  fc scrape <url> [--format markdown|html|links|screenshot] [--raw] [--json]
-  fc batch <urls.txt> [--out dataset.jsonl] [--format markdown] [--json]
-  fc search "<query>" [--limit N] [--json]
-  fc map <url> [--json]
-  fc crawl <url> [--limit N] [--out dir] [--json]
-  fc extract <url> --schema <file.json> [--prompt STR] [--json]
-  fc model list
-  fc model pull <name>
-  fc model swap <name>
-  fc model current
-  fc changes <url> [--diff] [--json]
-  fc webhook-listen [--port N] [--json]
-  fc health
-  fc logs [api|playwright-service|redis|rabbitmq|searxng|ollama]
+  fireclaude scrape <url> [--format markdown|html|links|screenshot] [--raw] [--json]
+  fireclaude batch <urls.txt> [--out dataset.jsonl] [--format markdown] [--json]
+  fireclaude search "<query>" [--limit N] [--json]
+  fireclaude map <url> [--json]
+  fireclaude crawl <url> [--limit N] [--out dir] [--json]
+  fireclaude extract <url> --schema <file.json> [--prompt STR] [--json]
+  fireclaude model list
+  fireclaude model pull <name>
+  fireclaude model swap <name>
+  fireclaude model current
+  fireclaude changes <url> [--diff] [--json]
+  fireclaude webhook-listen [--port N] [--json]
+  fireclaude health
+  fireclaude logs [api|playwright-service|redis|rabbitmq|searxng|ollama]
 
-Agent-safe JSON endpoints: fc doctor --json  |  fc status --json  |  fc scrape --json
+Agent-safe JSON endpoints: fireclaude doctor --json  |  fireclaude status --json  |  fireclaude scrape --json
 
 ENV: FIRECRAWL_URL (default $FC_URL)
      FIRECRAWL_INSTALL_DIR / FIRECLAUDE_INSTALL_DIR (install dir, default ~/.fireclaude/firecrawl)
@@ -673,6 +675,64 @@ cmd_webhook_listen() {
   exec python3 -u "$FC_SCRIPT_DIR/fc-webhook-listen.py" --port "$port" "${extra_args[@]}"
 }
 
+cmd_alias() {
+  local sub="${1:-}"; [[ -n "$sub" ]] || die "alias needs: install|uninstall"
+  shift
+  local yes=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --yes|-y) yes=1; shift ;;
+      *) die "alias $sub: unknown arg: $1" ;;
+    esac
+  done
+
+  local alias_line="alias fc='fireclaude'"
+  local rc_files=()
+  [[ -f "$HOME/.bashrc" ]]  && rc_files+=("$HOME/.bashrc")
+  [[ -f "$HOME/.zshrc" ]]   && rc_files+=("$HOME/.zshrc")
+
+  case "$sub" in
+    install)
+      if [[ "${#rc_files[@]}" -eq 0 ]]; then
+        echo "fireclaude: no ~/.bashrc or ~/.zshrc found — nothing to update." >&2
+        exit 0
+      fi
+      for rc in "${rc_files[@]}"; do
+        if grep -qF "$alias_line" "$rc" 2>/dev/null; then
+          echo "fireclaude: alias already present in $rc — skipping."
+          continue
+        fi
+        if [[ "$yes" -eq 0 ]]; then
+          read -r -p "Add '$alias_line' to $rc? [y/N] " _ans
+          _ans="${_ans:-N}"
+          [[ "$_ans" =~ ^[Yy]$ ]] || { echo "Skipped $rc."; continue; }
+        fi
+        printf '\n# fireclaude short alias (added by fireclaude alias install)\n%s\n' "$alias_line" >> "$rc"
+        echo "fireclaude: added alias to $rc"
+      done
+      echo "fireclaude: run 'source ~/.bashrc' (or open a new shell) to activate 'fc'."
+      ;;
+    uninstall)
+      for rc in "${rc_files[@]}"; do
+        if ! grep -qF "$alias_line" "$rc" 2>/dev/null; then
+          echo "fireclaude: alias not found in $rc — skipping."
+          continue
+        fi
+        if [[ "$yes" -eq 0 ]]; then
+          read -r -p "Remove fireclaude alias lines from $rc? [y/N] " _ans
+          _ans="${_ans:-N}"
+          [[ "$_ans" =~ ^[Yy]$ ]] || { echo "Skipped $rc."; continue; }
+        fi
+        # Remove the comment line and the alias line
+        sed -i '/# fireclaude short alias (added by fireclaude alias install)/d' "$rc"
+        sed -i "/alias fc='fireclaude'/d" "$rc"
+        echo "fireclaude: removed alias from $rc"
+      done
+      ;;
+    *) die "alias: unknown subcommand '$sub' (install|uninstall)" ;;
+  esac
+}
+
 main() {
   local cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 1; }
   shift
@@ -696,6 +756,7 @@ main() {
     model)          cmd_model "$@" ;;
     changes)        cmd_changes "$@" ;;
     webhook-listen) cmd_webhook_listen "$@" ;;
+    alias)          cmd_alias "$@" ;;
     -h|--help|help) usage ;;
     *) usage; exit 1 ;;
   esac
