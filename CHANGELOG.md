@@ -6,6 +6,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), [Semantic Vers
 
 ---
 
+## [1.0.0] — 2026-04-21 — stable
+
+First stable release. Public API frozen. Breaking changes from this point
+require a major bump.
+
+### Promoted from 1.0.0-rc1
+
+Identical codebase to `1.0.0-rc1`. Published to npm `latest` dist-tag.
+
+### Public API (frozen)
+
+- **Binary:** `fireclaude` (optional `fc` alias via `fireclaude alias install`)
+- **Subcommands:** `setup`, `start`, `stop`, `teardown`, `upgrade`, `version`,
+  `doctor`, `status`, `model list|pull`, `ollama-start`, `alias install|uninstall`
+- **Env vars:** `OLLAMA_MODE` (`auto`|`host`|`container`), `FIRECLAUDE_INSTALL_SH`,
+  `FIRECLAUDE_BIN`, `NO_COLOR`
+- **Skill layout:** `skills/fireclaude/`
+- **JSON shapes:** `doctor --json`, `status --json` (documented in README)
+
+### Install
+
+```bash
+npm install -g fireclaude
+fireclaude setup
+```
+
+### Upgrade from 0.x
+
+See [MIGRATION-0.x-to-1.0.md](./MIGRATION-0.x-to-1.0.md).
+
+### Known limits shipped honestly
+
+- CI-verified on Linux only. macOS branches in `install.sh` are exercised in
+  local smoke but not continuously in CI.
+- GPU acceleration requires host Ollama (`OLLAMA_MODE=host` or `auto`-resolved
+  to host). Bundled container is CPU-only.
+- Firecrawl upstream is pinned to a git SHA; bumping is a deliberate
+  `fireclaude upgrade --sha <SHA>` op.
+
+---
+
 ## [1.0.0-rc1] — 2026-04-21 — release candidate
 
 First release candidate for 1.0.0 stable. No new features vs 0.6.3. Gate this at
