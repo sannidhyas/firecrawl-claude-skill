@@ -1,0 +1,94 @@
+# Self-host parity extras:
+#  - searxng  → /v2/search
+#  - ollama   → /v2/scrape with format: {type:"json", schema:...}
+#  - tor      → PROXY_SERVER for Cloudflare mitigation (free, limited)
+services:
+  searxng:
+    image: searxng/searxng:latest
+    networks:
+      - backend
+    volumes:
+      - ./self-host-extras/searxng:/etc/searxng:rw
+    environment:
+      BASE_URL: http://searxng:8080/
+      INSTANCE_NAME: firecrawl-local
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  ollama:
+    image: ollama/ollama:latest
+    networks:
+      - backend
+    volumes:
+      - ./self-host-extras/ollama-data:/root/.ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_KEEP_ALIVE: 30m
+    restart: unless-stopped
+    # uncomment for GPU (needs nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  tor:
+    image: dperson/torproxy:latest
+    networks:
+      - backend
+    environment:
+      TOR_NewCircuitPeriod: "60"
+      TOR_MaxCircuitDirtiness: "120"
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  playwright-service:
+    environment:
+      PROXY_SERVER: ${PROXY_SERVER:-}
+      PROXY_USERNAME: ${PROXY_USERNAME:-}
+      PROXY_PASSWORD: ${PROXY_PASSWORD:-}
+      ALLOW_LOCAL_WEBHOOKS: "true"
+      BLOCK_MEDIA: "true"
+      MAX_CONCURRENT_PAGES: ${CRAWL_CONCURRENT_REQUESTS:-16}
+    cpus: 4.0
+    mem_limit: 6G
+    memswap_limit: 6G
+
+  api:
+    environment:
+      SEARXNG_ENDPOINT: http://searxng:8080
+      SEARXNG_ENGINES: google,bing,duckduckgo
+      SEARXNG_CATEGORIES: general
+      OLLAMA_BASE_URL: http://ollama:11434/api
+      MODEL_NAME: ${MODEL_NAME:-llama3.2:3b}
+      MODEL_EMBEDDING_NAME: ${MODEL_EMBEDDING_NAME:-nomic-embed-text}
+      ALLOW_LOCAL_WEBHOOKS: "true"
+    depends_on:
+      redis:
+        condition: service_started
+      playwright-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      searxng:
+        condition: service_started
+      ollama:
+        condition: service_started

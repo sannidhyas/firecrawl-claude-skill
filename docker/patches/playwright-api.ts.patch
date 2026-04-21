@@ -1,0 +1,50 @@
+# Pinned upstream SHA: 0ae6387b762c7450190eb7d8f9f7b81b7adfcaab
+# Apply with: git apply --3way docker/patches/playwright-api.ts.patch
+diff --git a/apps/playwright-service-ts/api.ts b/apps/playwright-service-ts/api.ts
+index 4e0f3b8..f8df319 100644
+--- a/apps/playwright-service-ts/api.ts
++++ b/apps/playwright-service-ts/api.ts
+@@ -1,5 +1,11 @@
+ import express, { Request, Response } from 'express';
+-import { chromium, Browser, BrowserContext, Route, Request as PlaywrightRequest, Page } from 'playwright';
++import { Browser, BrowserContext, Route, Request as PlaywrightRequest, Page } from 'playwright';
++// self-host patch: use playwright-extra + stealth plugin to bypass common
++// antibot fingerprints (navigator.webdriver, chrome.runtime, WebGL vendor, etc).
++import { chromium } from 'playwright-extra';
++// @ts-ignore — plugin has no bundled types
++import StealthPlugin from 'puppeteer-extra-plugin-stealth';
++chromium.use(StealthPlugin());
+ import dotenv from 'dotenv';
+ import UserAgent from 'user-agents';
+ import { getError } from './helpers/get_error';
+@@ -192,7 +198,10 @@ const initializeBrowser = async () => {
+       '--disable-accelerated-2d-canvas',
+       '--no-first-run',
+       '--no-zygote',
+-      '--disable-gpu'
++      '--disable-gpu',
++      // self-host patch: defeat navigator.webdriver=true + CDP fingerprint
++      '--disable-blink-features=AutomationControlled',
++      '--disable-infobars'
+     ]
+   });
+ };
+@@ -424,10 +433,17 @@ app.post('/scrape', async (req: Request, res: Response) => {
+       }
+     }
+
++    // Use 'networkidle' when a non-zero waitFor is requested so that
++    // Cloudflare JS-challenge pages have time to complete their fetch
++    // requests before we snapshot the DOM.  For zero-wait requests keep
++    // the cheaper 'load' event to avoid unnecessary delays on clean sites.
++    const waitUntilStrategy: 'load' | 'networkidle' =
++      wait_after_load > 0 ? 'networkidle' : 'load';
++
+     const result = await scrapePage(
+       page,
+       url,
+-      'load',
++      waitUntilStrategy,
+       wait_after_load,
+       timeout,
+       check_selector,

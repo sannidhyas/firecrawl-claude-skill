@@ -1,0 +1,41 @@
+# Pinned upstream SHA: 0ae6387b762c7450190eb7d8f9f7b81b7adfcaab
+# Apply with: git apply --3way docker/patches/scrapeURL-index.ts.patch
+diff --git a/apps/api/src/scraper/scrapeURL/index.ts b/apps/api/src/scraper/scrapeURL/index.ts
+index 35f4d57..5598345 100644
+--- a/apps/api/src/scraper/scrapeURL/index.ts
++++ b/apps/api/src/scraper/scrapeURL/index.ts
+@@ -987,7 +987,12 @@ export async function scrapeURL(
+         maxFeatureToggles: config.SCRAPE_MAX_FEATURE_TOGGLES,
+         maxFeatureRemovals: config.SCRAPE_MAX_FEATURE_REMOVALS,
+         maxPdfPrefetches: config.SCRAPE_MAX_PDF_PREFETCHES,
+-        maxDocumentPrefetches: config.SCRAPE_MAX_DOCUMENT_PREFETCHES,
++        // SELF_HOST_ANTIBOT_RETRIES overrides the document-prefetch retry cap so
++        // Cloudflare JS-challenge pages have more attempts to resolve.
++        maxDocumentPrefetches: Math.max(
++          config.SCRAPE_MAX_DOCUMENT_PREFETCHES,
++          config.SELF_HOST_ANTIBOT_RETRIES,
++        ),
+       },
+       meta.logger,
+     );
+@@ -1070,6 +1075,20 @@ export async function scrapeURL(
+               meta.featureFlags = new Set(
+                 [...meta.featureFlags].filter(x => x !== "document"),
+               );
++              // Honor SELF_HOST_ANTIBOT_WAIT_MS: pause before retrying so that
++              // any in-flight Cloudflare JS-challenge can finish resolving.
++              // Also honors user-supplied waitFor as a floor so that explicit
++              // waitFor requests are always respected before classification fires.
++              const antibotWait = Math.max(
++                config.SELF_HOST_ANTIBOT_WAIT_MS,
++                meta.options.waitFor ?? 0,
++              );
++              if (antibotWait > 0) {
++                meta.logger.debug(
++                  `Waiting ${antibotWait}ms before antibot retry (SELF_HOST_ANTIBOT_WAIT_MS)`,
++                );
++                await new Promise(resolve => setTimeout(resolve, antibotWait));
++              }
+             }
+           } else {
+             throw error;

@@ -1,0 +1,15 @@
+# Pinned upstream SHA: 0ae6387b762c7450190eb7d8f9f7b81b7adfcaab
+# Apply with: git apply --3way docker/patches/playwright-package.json.patch
+diff --git a/apps/playwright-service-ts/package.json b/apps/playwright-service-ts/package.json
+index 0ec95ae..d380746 100644
+--- a/apps/playwright-service-ts/package.json
++++ b/apps/playwright-service-ts/package.json
+@@ -16,6 +16,8 @@
+     "express": "^5.2.1",
+     "ipaddr.js": "^2.3.0",
+     "playwright": "^1.58.1",
++    "playwright-extra": "^4.3.6",
++    "puppeteer-extra-plugin-stealth": "^2.11.2",
+     "user-agents": "^1.1.669"
+   },
+   "devDependencies": {

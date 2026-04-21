@@ -1,0 +1,20 @@
+# Pinned upstream SHA: 0ae6387b762c7450190eb7d8f9f7b81b7adfcaab
+# Apply with: git apply --3way docker/patches/config.ts.patch
+diff --git a/apps/api/src/config.ts b/apps/api/src/config.ts
+index adf824e..a4541b8 100644
+--- a/apps/api/src/config.ts
++++ b/apps/api/src/config.ts
+@@ -117,6 +117,13 @@ const configSchema = z.object({
+   SCRAPE_MAX_PDF_PREFETCHES: z.coerce.number().int().positive().default(2),
+   SCRAPE_MAX_DOCUMENT_PREFETCHES: z.coerce.number().int().positive().default(2),
+
++  // Self-hosted antibot bypass tuning
++  // SELF_HOST_ANTIBOT_RETRIES: max document_antibot retries before giving up (default 3)
++  // SELF_HOST_ANTIBOT_WAIT_MS: extra ms to sleep before each antibot retry, giving
++  //   Cloudflare JS-challenge pages time to resolve (default 2000)
++  SELF_HOST_ANTIBOT_RETRIES: z.coerce.number().int().nonnegative().default(3),
++  SELF_HOST_ANTIBOT_WAIT_MS: z.coerce.number().int().nonnegative().default(2000),
++
+   // Search Services
+   SEARXNG_ENDPOINT: z.string().optional(),
+   SEARXNG_ENGINES: z.string().optional(),

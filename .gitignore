@@ -1,0 +1,32 @@
+# Never commit the install dir or nested clone
+.firecrawl-claude-skill/
+firecrawl/
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Smoke test artifacts
+/tmp/

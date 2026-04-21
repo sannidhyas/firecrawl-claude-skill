@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# firecrawl wrapper - talks to local self-hosted Firecrawl
+set -euo pipefail
+
+FC_URL="${FIRECRAWL_URL:-http://localhost:3002}"
+FC_REPO="${FIRECRAWL_REPO:-${FIRECRAWL_INSTALL_DIR:-$HOME/.firecrawl-claude-skill/firecrawl}}"
+
+die() { echo "fc: $*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || die "missing dep: $1"; }
+need curl
+need jq
+
+usage() {
+  cat <<EOF
+fc - Firecrawl self-host wrapper
+
+  fc scrape <url> [--format markdown|html|links|screenshot] [--raw]
+  fc batch <urls.txt> [--out dataset.jsonl] [--format markdown]
+  fc search "<query>" [--limit N]
+  fc map <url>
+  fc crawl <url> [--limit N] [--out dir]
+  fc health
+  fc status
+  fc logs [api|playwright-service|redis|rabbitmq|searxng|ollama|tor]
+
+ENV: FIRECRAWL_URL (default $FC_URL), FIRECRAWL_REPO / FIRECRAWL_INSTALL_DIR (default $FC_REPO)
+EOF
+}
+
+post() {
+  local path="$1" body="$2"
+  curl -sS -X POST "$FC_URL$path" -H 'Content-Type: application/json' -d "$body"
+}
+get() { curl -sS "$FC_URL$1"; }
+
+cmd_health() {
+  local r
+  r=$(curl -sS -o /dev/null -w '%{http_code}' "$FC_URL/v2/scrape" -X POST \
+      -H 'Content-Type: application/json' -d '{"url":"https://example.com","formats":["markdown"]}' || true)
+  if [[ "$r" =~ ^(200|408|500)$ ]]; then
+    echo "firecrawl reachable at $FC_URL (HTTP $r)"
+  else
+    die "firecrawl unreachable at $FC_URL (HTTP $r)"
+  fi
+}
+
+cmd_status() {
+  (cd "$FC_REPO" && docker compose ps)
+}
+
+cmd_logs() {
+  local svc="${1:-api}"
+  (cd "$FC_REPO" && docker compose logs --tail=200 "$svc")
+}
+
+cmd_scrape() {
+  [[ $# -ge 1 ]] || die "scrape needs <url>"
+  local url="$1"; shift
+  local fmt="markdown" raw=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --format) fmt="$2"; shift 2 ;;
+      --raw) raw=1; shift ;;
+      *) die "unknown arg: $1" ;;
+    esac
+  done
+  local body
+  body=$(jq -nc --arg u "$url" --arg f "$fmt" '{url:$u, formats:[$f], onlyMainContent:true}')
+  local resp; resp=$(post /v2/scrape "$body")
+  if [[ "$raw" -eq 1 ]]; then echo "$resp"; return; fi
+  echo "$resp" | jq -r ".data.$fmt // .data // .error // \"(no $fmt)\""
+}
+
+cmd_map() {
+  [[ $# -ge 1 ]] || die "map needs <url>"
+  local body; body=$(jq -nc --arg u "$1" '{url:$u}')
+  post /v2/map "$body" | jq -r '.links[]? // .data.links[]? // empty'
+}
+
+cmd_search() {
+  [[ $# -ge 1 ]] || die "search needs <query>"
+  local q="$1"; shift
+  local limit=10
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --limit) limit="$2"; shift 2 ;;
+      *) die "unknown arg: $1" ;;
+    esac
+  done
+  local body; body=$(jq -nc --arg q "$q" --argjson n "$limit" '{query:$q, limit:$n}')
+  post /v2/search "$body" | jq '.data // .'
+}
+
+cmd_batch() {
+  [[ $# -ge 1 ]] || die "batch needs <urls.txt>"
+  local urls_file="$1"; shift
+  local out="" fmt="markdown"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --out) out="$2"; shift 2 ;;
+      --format) fmt="$2"; shift 2 ;;
+      *) die "unknown arg: $1" ;;
+    esac
+  done
+  [[ -f "$urls_file" ]] || die "no such file: $urls_file"
+  exec python3 "$(dirname "$0")/batch-dataset.py" \
+      --urls "$urls_file" \
+      ${out:+--out "$out"} \
+      --format "$fmt" \
+      --only-main
+}
+
+cmd_crawl() {
+  [[ $# -ge 1 ]] || die "crawl needs <url>"
+  local url="$1"; shift
+  local limit=20 out=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --limit) limit="$2"; shift 2 ;;
+      --out) out="$2"; shift 2 ;;
+      *) die "unknown arg: $1" ;;
+    esac
+  done
+  local body; body=$(jq -nc --arg u "$url" --argjson n "$limit" \
+    '{url:$u, limit:$n, scrapeOptions:{formats:["markdown"], onlyMainContent:true}}')
+  local start; start=$(post /v2/crawl "$body")
+  local id; id=$(echo "$start" | jq -r '.id // .jobId // empty')
+  [[ -n "$id" ]] || { echo "$start" >&2; die "no job id returned"; }
+  echo "crawl job id: $id" >&2
+  local status resp
+  while :; do
+    resp=$(get "/v2/crawl/$id")
+    status=$(echo "$resp" | jq -r '.status // empty')
+    echo "  status=$status completed=$(echo "$resp" | jq -r '.completed // 0')/$(echo "$resp" | jq -r '.total // "?"')" >&2
+    [[ "$status" == "completed" || "$status" == "failed" ]] && break
+    sleep 3
+  done
+  if [[ -n "$out" ]]; then
+    mkdir -p "$out"
+    echo "$resp" | jq -c '.data[]?' | while IFS= read -r row; do
+      local u safe
+      u=$(echo "$row" | jq -r '.metadata.url // .url // "unknown"')
+      safe=$(echo "$u" | sed 's|[^a-zA-Z0-9]|_|g' | cut -c1-120)
+      echo "$row" | jq -r '.markdown // ""' > "$out/$safe.md"
+    done
+    echo "wrote $(ls "$out" | wc -l) files to $out" >&2
+  else
+    echo "$resp" | jq
+  fi
+}
+
+main() {
+  local cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 1; }
+  shift
+  case "$cmd" in
+    health) cmd_health "$@" ;;
+    status) cmd_status "$@" ;;
+    logs)   cmd_logs "$@" ;;
+    scrape) cmd_scrape "$@" ;;
+    map)    cmd_map "$@" ;;
+    search) cmd_search "$@" ;;
+    batch)  cmd_batch "$@" ;;
+    crawl)  cmd_crawl "$@" ;;
+    -h|--help|help) usage ;;
+    *) usage; exit 1 ;;
+  esac
+}
+main "$@"

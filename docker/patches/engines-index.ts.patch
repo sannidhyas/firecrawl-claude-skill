@@ -1,0 +1,37 @@
+# Pinned upstream SHA: 0ae6387b762c7450190eb7d8f9f7b81b7adfcaab
+# Apply with: git apply --3way docker/patches/engines-index.ts.patch
+diff --git a/apps/api/src/scraper/scrapeURL/engines/index.ts b/apps/api/src/scraper/scrapeURL/engines/index.ts
+index 9f17ff6..4588894 100644
+--- a/apps/api/src/scraper/scrapeURL/engines/index.ts
++++ b/apps/api/src/scraper/scrapeURL/engines/index.ts
+@@ -327,7 +327,10 @@ const engineOptions: {
+       mobile: false,
+       skipTlsVerification: true,
+       useFastMode: false,
+-      stealthProxy: false,
++      // playwright-extra + stealth plugin IS the stealth layer for self-hosted;
++      // mark it as supporting stealthProxy so it is not de-selected after
++      // AddFeatureError(["stealthProxy"]) bumps the priority threshold above 1.
++      stealthProxy: true,
+       branding: false,
+       disableAdblock: false,
+     },
+@@ -561,6 +564,18 @@ export async function buildFallbackList(meta: Meta): Promise<
+       }
+     }
+
++    // Specialty engines (pdf, document) must only run when their feature flag is
++    // explicitly requested. Without this guard, adding `stealthProxy` after a CF
++    // 403 causes the next iteration to select these engines for plain HTML URLs
++    // (they happen to support stealthProxy), triggering DocumentAntibotError and
++    // burning the document_antibot retry budget on every Cloudflare-protected page.
++    if (engine === "pdf" && !meta.featureFlags.has("pdf")) {
++      continue;
++    }
++    if (engine === "document" && !meta.featureFlags.has("document")) {
++      continue;
++    }
++
+     if (supportScore >= priorityThreshold) {
+       selectedEngines.push({ engine, supportScore, unsupportedFeatures });
+     }
