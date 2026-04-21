@@ -37,21 +37,21 @@ jobs:
 
       - name: Resolve and verify FC_BIN
         run: |
-          # npm bin -g was removed in npm 7+. Derive the bin dir from the global root.
-          # npm places bin symlinks at <prefix>/bin which is one level above node_modules.
-          NPM_GLOBAL_ROOT="$(npm root -g)"
-          FC_BIN="${NPM_GLOBAL_ROOT}/../bin/fc"
-          # Canonicalise the path (resolves ../ segments)
-          FC_BIN="$(realpath "$FC_BIN" 2>/dev/null || readlink -f "$FC_BIN")"
+          # npm prefix -g gives the installation prefix (e.g. /usr/local).
+          # npm places bin symlinks at <prefix>/bin — this is stable across npm versions.
+          NPM_PREFIX="$(npm prefix -g)"
+          FC_BIN="${NPM_PREFIX}/bin/fc"
 
           echo "--- PATH shadowing diagnostics ---"
           echo "which fc        : $(which fc 2>/dev/null || echo '(not in PATH)')"
-          echo "type fc         : $(type fc 2>/dev/null || echo '(not found)')"
-          echo "npm root -g     : ${NPM_GLOBAL_ROOT}"
-          echo "FC_BIN resolved : ${FC_BIN}"
+          echo "type -a fc      : $(type -a fc 2>/dev/null || echo '(not found)')"
+          echo "npm prefix -g   : ${NPM_PREFIX}"
+          echo "FC_BIN          : ${FC_BIN}"
           ls -la "${FC_BIN}" || { echo "ERROR: FC_BIN not found at ${FC_BIN}"; exit 1; }
-          # Confirm the file is our shim, not fontconfig
-          head -1 "${FC_BIN}" | grep -q node || { echo "ERROR: FC_BIN does not look like a Node shim"; exit 1; }
+          # Confirm the symlink target is our Node shim, not fontconfig
+          FC_REAL="$(readlink -f "${FC_BIN}")"
+          echo "FC_BIN realpath : ${FC_REAL}"
+          head -1 "${FC_REAL}" | grep -q node || { echo "ERROR: FC_BIN target does not look like a Node shim (head: $(head -1 "${FC_REAL}"))"; exit 1; }
           echo "FC_BIN=${FC_BIN}" >> "$GITHUB_ENV"
 
       - name: Bootstrap Firecrawl stack
