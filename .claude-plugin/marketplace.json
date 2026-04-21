@@ -1,0 +1,41 @@
+{
+  "name": "firecrawl-claude-skill",
+  "version": "0.2.0",
+  "description": "Self-hosted Firecrawl for Claude Code — scrape, crawl, search, batch, JSON-schema extract, change tracking, webhook testing, model swap. No API keys, no paid tiers.",
+  "homepage": "https://github.com/sannidhyas/firecrawl-claude-skill",
+  "repository": "github:sannidhyas/firecrawl-claude-skill",
+  "author": {
+    "name": "sannidhyas",
+    "url": "https://github.com/sannidhyas"
+  },
+  "license": "MIT",
+  "keywords": [
+    "firecrawl",
+    "scraping",
+    "crawling",
+    "self-hosted",
+    "ollama",
+    "searxng",
+    "web-search",
+    "change-tracking",
+    "agentic"
+  ],
+  "skills": [
+    {
+      "name": "firecrawl",
+      "path": "skills/firecrawl",
+      "description": "Scrape, crawl, search, extract, and track changes via self-hosted Firecrawl",
+      "commands": [
+        {
+          "name": "fc",
+          "path": "skills/firecrawl/scripts/fc",
+          "description": "Main Firecrawl CLI wrapper"
+        }
+      ]
+    }
+  ],
+  "install": {
+    "script": "install.sh",
+    "description": "Run ./install.sh to bootstrap the Docker stack (Firecrawl API + Playwright + SearxNG + Ollama)"
+  }
+}

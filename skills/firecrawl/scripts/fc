@@ -4,6 +4,12 @@ set -euo pipefail
 
 FC_URL="${FIRECRAWL_URL:-http://localhost:3002}"
 FC_REPO="${FIRECRAWL_REPO:-${FIRECRAWL_INSTALL_DIR:-$HOME/.firecrawl-claude-skill/firecrawl}}"
+FC_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CHANGES_DB_PATH="${CHANGES_DB_PATH:-$HOME/.firecrawl-claude-skill/changes.db}"
+
+# Container name derives from COMPOSE_PROJECT_NAME (default: firecrawl)
+_COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-firecrawl}"
+OLLAMA_CONTAINER="${_COMPOSE_PROJECT}-ollama-1"
 
 die() { echo "fc: $*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing dep: $1"; }
@@ -14,16 +20,24 @@ usage() {
   cat <<EOF
 fc - Firecrawl self-host wrapper
 
-  fc scrape <url> [--format markdown|html|links|screenshot] [--raw]
-  fc batch <urls.txt> [--out dataset.jsonl] [--format markdown]
-  fc search "<query>" [--limit N]
-  fc map <url>
-  fc crawl <url> [--limit N] [--out dir]
+  fc scrape <url> [--format markdown|html|links|screenshot] [--raw] [--json]
+  fc batch <urls.txt> [--out dataset.jsonl] [--format markdown] [--json]
+  fc search "<query>" [--limit N] [--json]
+  fc map <url> [--json]
+  fc crawl <url> [--limit N] [--out dir] [--json]
+  fc extract <url> --schema <file.json> [--prompt STR] [--json]
+  fc model list
+  fc model pull <name>
+  fc model swap <name>
+  fc model current
+  fc changes <url> [--diff] [--json]
+  fc webhook-listen [--port N] [--json]
   fc health
   fc status
-  fc logs [api|playwright-service|redis|rabbitmq|searxng|ollama|tor]
+  fc logs [api|playwright-service|redis|rabbitmq|searxng|ollama]
 
 ENV: FIRECRAWL_URL (default $FC_URL), FIRECRAWL_REPO / FIRECRAWL_INSTALL_DIR (default $FC_REPO)
+     CHANGES_DB_PATH (default \$HOME/.firecrawl-claude-skill/changes.db)
 EOF
 }
 
@@ -56,68 +70,88 @@ cmd_logs() {
 cmd_scrape() {
   [[ $# -ge 1 ]] || die "scrape needs <url>"
   local url="$1"; shift
-  local fmt="markdown" raw=0
+  local fmt="markdown" raw=0 json_out=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --format) fmt="$2"; shift 2 ;;
       --raw) raw=1; shift ;;
+      --json) json_out=1; shift ;;
       *) die "unknown arg: $1" ;;
     esac
   done
   local body
   body=$(jq -nc --arg u "$url" --arg f "$fmt" '{url:$u, formats:[$f], onlyMainContent:true}')
   local resp; resp=$(post /v2/scrape "$body")
+  if [[ "$json_out" -eq 1 ]]; then echo "$resp"; return; fi
   if [[ "$raw" -eq 1 ]]; then echo "$resp"; return; fi
   echo "$resp" | jq -r ".data.$fmt // .data // .error // \"(no $fmt)\""
 }
 
 cmd_map() {
   [[ $# -ge 1 ]] || die "map needs <url>"
-  local body; body=$(jq -nc --arg u "$1" '{url:$u}')
-  post /v2/map "$body" | jq -r '.links[]? // .data.links[]? // empty'
+  local url="$1"; shift
+  local json_out=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json) json_out=1; shift ;;
+      *) die "unknown arg: $1" ;;
+    esac
+  done
+  local body; body=$(jq -nc --arg u "$url" '{url:$u}')
+  local resp; resp=$(post /v2/map "$body")
+  if [[ "$json_out" -eq 1 ]]; then echo "$resp"; return; fi
+  echo "$resp" | jq -r '.links[]? // .data.links[]? // empty'
 }
 
 cmd_search() {
   [[ $# -ge 1 ]] || die "search needs <query>"
   local q="$1"; shift
-  local limit=10
+  local limit=10 json_out=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --limit) limit="$2"; shift 2 ;;
+      --json) json_out=1; shift ;;
       *) die "unknown arg: $1" ;;
     esac
   done
   local body; body=$(jq -nc --arg q "$q" --argjson n "$limit" '{query:$q, limit:$n}')
-  post /v2/search "$body" | jq '.data // .'
+  local resp; resp=$(post /v2/search "$body")
+  if [[ "$json_out" -eq 1 ]]; then echo "$resp"; return; fi
+  echo "$resp" | jq '.data // .'
 }
 
 cmd_batch() {
   [[ $# -ge 1 ]] || die "batch needs <urls.txt>"
   local urls_file="$1"; shift
-  local out="" fmt="markdown"
+  local out="" fmt="markdown" json_out=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --out) out="$2"; shift 2 ;;
       --format) fmt="$2"; shift 2 ;;
+      --json) json_out=1; shift ;;
       *) die "unknown arg: $1" ;;
     esac
   done
   [[ -f "$urls_file" ]] || die "no such file: $urls_file"
-  exec python3 "$(dirname "$0")/batch-dataset.py" \
+  local extra_args=()
+  [[ "$json_out" -eq 1 ]] && extra_args+=("--json")
+  exec python3 "$FC_SCRIPT_DIR/batch-dataset.py" \
       --urls "$urls_file" \
       ${out:+--out "$out"} \
       --format "$fmt" \
-      --only-main
+      --only-main \
+      "${extra_args[@]}"
 }
 
 cmd_crawl() {
   [[ $# -ge 1 ]] || die "crawl needs <url>"
   local url="$1"; shift
-  local limit=20 out=""
+  local limit=20 out="" json_out=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --limit) limit="$2"; shift 2 ;;
       --out) out="$2"; shift 2 ;;
+      --json) json_out=1; shift ;;
       *) die "unknown arg: $1" ;;
     esac
   done
@@ -135,6 +169,7 @@ cmd_crawl() {
     [[ "$status" == "completed" || "$status" == "failed" ]] && break
     sleep 3
   done
+  if [[ "$json_out" -eq 1 ]]; then echo "$resp"; return; fi
   if [[ -n "$out" ]]; then
     mkdir -p "$out"
     echo "$resp" | jq -c '.data[]?' | while IFS= read -r row; do
@@ -149,18 +184,141 @@ cmd_crawl() {
   fi
 }
 
+cmd_extract() {
+  [[ $# -ge 1 ]] || die "extract needs <url>"
+  local url="$1"; shift
+  local schema_file="" prompt="" json_out=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --schema) schema_file="$2"; shift 2 ;;
+      --prompt) prompt="$2"; shift 2 ;;
+      --json) json_out=1; shift ;;
+      *) die "unknown arg: $1" ;;
+    esac
+  done
+  [[ -n "$schema_file" ]] || die "extract needs --schema <file.json>"
+  [[ -f "$schema_file" ]] || die "schema file not found: $schema_file"
+  local schema; schema=$(cat "$schema_file")
+  local fmt_obj
+  if [[ -n "$prompt" ]]; then
+    fmt_obj=$(jq -nc --argjson s "$schema" --arg p "$prompt" '{type:"json",schema:$s,prompt:$p}')
+  else
+    fmt_obj=$(jq -nc --argjson s "$schema" '{type:"json",schema:$s}')
+  fi
+  local body; body=$(jq -nc --arg u "$url" --argjson f "$fmt_obj" '{url:$u,formats:[$f],onlyMainContent:true}')
+  local resp; resp=$(post /v2/scrape "$body")
+  if [[ "$json_out" -eq 1 ]]; then echo "$resp"; return; fi
+  echo "$resp" | jq '.data.json // .data // .error // "(no json)"'
+}
+
+cmd_model() {
+  local sub="${1:-}"; [[ -n "$sub" ]] || die "model needs: list|pull|swap|current"
+  shift
+  case "$sub" in
+    list)
+      docker exec "$OLLAMA_CONTAINER" ollama list | tail -n +2 | awk '{print $1}' | jq -Rn '[inputs]'
+      ;;
+    pull)
+      [[ $# -ge 1 ]] || die "model pull needs <name>"
+      docker exec "$OLLAMA_CONTAINER" ollama pull "$1"
+      ;;
+    swap)
+      [[ $# -ge 1 ]] || die "model swap needs <name>"
+      local name="$1"
+      local env_file="$FC_REPO/.env"
+      [[ -f "$env_file" ]] || die "no .env at $env_file"
+      # Pull first
+      echo "Pulling $name into ollama container..." >&2
+      docker exec "$OLLAMA_CONTAINER" ollama pull "$name"
+      # Update MODEL_NAME in .env
+      sed -i "s/^MODEL_NAME=.*/MODEL_NAME=$name/" "$env_file"
+      echo "Updated MODEL_NAME=$name in $env_file" >&2
+      # Recreate api container to pick up new env
+      (cd "$FC_REPO" && docker compose up -d --force-recreate api)
+      # Wait for API health
+      local url="http://localhost:${PORT:-3002}"
+      echo "Waiting for API health after swap..." >&2
+      local deadline=$((SECONDS + 60))
+      while [[ $SECONDS -lt $deadline ]]; do
+        local http_code
+        http_code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$url/v2/scrape" \
+          -H 'Content-Type: application/json' \
+          -d '{"url":"https://example.com","formats":["markdown"]}' 2>/dev/null || echo "000")
+        if [[ "$http_code" =~ ^(200|408|500)$ ]]; then
+          echo "API healthy (HTTP $http_code). Model swapped to $name." >&2
+          break
+        fi
+        sleep 3
+      done
+      echo "$name"
+      ;;
+    current)
+      local env_file="$FC_REPO/.env"
+      if [[ -f "$env_file" ]]; then
+        grep '^MODEL_NAME=' "$env_file" | cut -d= -f2-
+      else
+        echo "${MODEL_NAME:-llama3.2:3b}"
+      fi
+      ;;
+    *) die "model: unknown subcommand '$sub' (list|pull|swap|current)" ;;
+  esac
+}
+
+cmd_changes() {
+  [[ $# -ge 1 ]] || die "changes needs <url>"
+  local url="$1"; shift
+  local diff_mode=0 json_out=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --diff) diff_mode=1; shift ;;
+      --json) json_out=1; shift ;;
+      *) die "unknown arg: $1" ;;
+    esac
+  done
+  need python3
+  local extra_args=()
+  [[ "$diff_mode" -eq 1 ]] && extra_args+=("--diff")
+  [[ "$json_out" -eq 1 ]] && extra_args+=("--json")
+  python3 "$FC_SCRIPT_DIR/fc-changes.py" \
+    --url "$url" \
+    --db "$CHANGES_DB_PATH" \
+    --firecrawl-url "$FC_URL" \
+    "${extra_args[@]}"
+}
+
+cmd_webhook_listen() {
+  local port=4321 json_out=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --port) port="$2"; shift 2 ;;
+      --json) json_out=1; shift ;;
+      *) die "unknown arg: $1" ;;
+    esac
+  done
+  need python3
+  local extra_args=()
+  [[ "$json_out" -eq 1 ]] && extra_args+=("--json")
+  # exec replaces the bash wrapper so $! is the real python PID;
+  # -u forces unbuffered stdout so JSON lines appear immediately.
+  exec python3 -u "$FC_SCRIPT_DIR/fc-webhook-listen.py" --port "$port" "${extra_args[@]}"
+}
+
 main() {
   local cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 1; }
   shift
   case "$cmd" in
-    health) cmd_health "$@" ;;
-    status) cmd_status "$@" ;;
-    logs)   cmd_logs "$@" ;;
-    scrape) cmd_scrape "$@" ;;
-    map)    cmd_map "$@" ;;
-    search) cmd_search "$@" ;;
-    batch)  cmd_batch "$@" ;;
-    crawl)  cmd_crawl "$@" ;;
+    health)         cmd_health "$@" ;;
+    status)         cmd_status "$@" ;;
+    logs)           cmd_logs "$@" ;;
+    scrape)         cmd_scrape "$@" ;;
+    map)            cmd_map "$@" ;;
+    search)         cmd_search "$@" ;;
+    batch)          cmd_batch "$@" ;;
+    crawl)          cmd_crawl "$@" ;;
+    extract)        cmd_extract "$@" ;;
+    model)          cmd_model "$@" ;;
+    changes)        cmd_changes "$@" ;;
+    webhook-listen) cmd_webhook_listen "$@" ;;
     -h|--help|help) usage ;;
     *) usage; exit 1 ;;
   esac

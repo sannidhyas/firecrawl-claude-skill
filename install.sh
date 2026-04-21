@@ -34,6 +34,12 @@ docker compose version >/dev/null 2>&1 || \
   die "docker compose (v2 plugin) not found. Install Docker Desktop or 'apt install docker-compose-plugin'."
 info "All dependencies present."
 
+# ── Step 1b: create data dir for change tracking ─────────────────────────────
+CHANGES_DB_DIR="${CHANGES_DB_PATH:-$HOME/.firecrawl-claude-skill/changes.db}"
+CHANGES_DB_DIR="$(dirname "$CHANGES_DB_DIR")"
+mkdir -p "$CHANGES_DB_DIR"
+info "Change-tracking DB dir: $CHANGES_DB_DIR"
+
 # ── Step 2: clone firecrawl ───────────────────────────────────────────────────
 if [[ -d "$FIRECRAWL_INSTALL_DIR/.git" ]]; then
   warn "Firecrawl repo already exists at $FIRECRAWL_INSTALL_DIR — skipping clone."

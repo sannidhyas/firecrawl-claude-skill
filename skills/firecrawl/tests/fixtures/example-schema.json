@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "properties": {
+    "page_title": {
+      "type": "string",
+      "description": "The main title of the page"
+    },
+    "description": {
+      "type": "string",
+      "description": "A brief description or summary of the page content"
+    }
+  },
+  "required": ["page_title"]
+}
