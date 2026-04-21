@@ -3,6 +3,7 @@
 set -euo pipefail
 
 FIRECRAWL_INSTALL_DIR="${FIRECRAWL_INSTALL_DIR:-$HOME/.firecrawl-claude-skill/firecrawl}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-firecrawl}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info() { echo -e "${GREEN}[uninstall]${NC} $*"; }
@@ -13,15 +14,17 @@ if [[ ! -d "$FIRECRAWL_INSTALL_DIR" ]]; then
   exit 0
 fi
 
-info "Stopping and removing containers..."
-(cd "$FIRECRAWL_INSTALL_DIR" && docker compose down --remove-orphans) || \
+info "Stopping and removing containers (project: $COMPOSE_PROJECT_NAME)..."
+(cd "$FIRECRAWL_INSTALL_DIR" && \
+  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" \
+  docker compose --project-name "$COMPOSE_PROJECT_NAME" down --remove-orphans) || \
   warn "docker compose down failed — containers may already be stopped."
 
 echo ""
 echo "Containers removed. Data volumes (ollama models, redis, postgres) are preserved."
 echo ""
 echo "To also remove volumes:"
-echo "  cd $FIRECRAWL_INSTALL_DIR && docker compose down -v"
+echo "  cd $FIRECRAWL_INSTALL_DIR && docker compose --project-name $COMPOSE_PROJECT_NAME down -v"
 echo ""
 echo "To fully remove the install directory:"
 echo "  rm -rf $FIRECRAWL_INSTALL_DIR"
