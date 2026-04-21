@@ -1,41 +1,17 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "fireclaude",
-  "version": "0.6.2",
   "description": "Self-hosted Firecrawl for Claude Code — scrape, crawl, search, batch-dataset, JSON schema extract via local Ollama. No API keys, no paid tiers.",
-  "homepage": "https://github.com/sannidhyas/fireclaude",
-  "repository": "github:sannidhyas/fireclaude",
-  "author": {
+  "owner": {
     "name": "sannidhyas",
     "url": "https://github.com/sannidhyas"
   },
-  "license": "MIT",
-  "keywords": [
-    "firecrawl",
-    "scraping",
-    "crawling",
-    "self-hosted",
-    "ollama",
-    "searxng",
-    "web-search",
-    "change-tracking",
-    "agentic"
-  ],
-  "skills": [
+  "plugins": [
     {
       "name": "fireclaude",
-      "path": "skills/fireclaude",
-      "description": "Scrape, crawl, search, extract, and track changes via self-hosted Firecrawl",
-      "commands": [
-        {
-          "name": "fc",
-          "path": "skills/fireclaude/scripts/fc",
-          "description": "Main Firecrawl CLI wrapper"
-        }
-      ]
+      "description": "Self-hosted Firecrawl skill — scrape, crawl, search, extract, change tracking, webhook testing, model swap.",
+      "source": "./",
+      "category": "web-scraping"
     }
-  ],
-  "install": {
-    "script": "install.sh",
-    "description": "Run ./install.sh to bootstrap the Docker stack (Firecrawl API + Playwright + SearxNG + Ollama)"
-  }
+  ]
 }

@@ -157,8 +157,17 @@ cp "$PLUGIN_ROOT/docker/docker-compose.override.yaml" "$FIRECRAWL_INSTALL_DIR/do
 
 info "Copying searxng settings ..."
 mkdir -p "$FIRECRAWL_INSTALL_DIR/self-host-extras/searxng"
-cp "$PLUGIN_ROOT/docker/searxng-settings.yml" \
-   "$FIRECRAWL_INSTALL_DIR/self-host-extras/searxng/settings.yml"
+SEARXNG_SRC="$PLUGIN_ROOT/docker/searxng-settings.yml"
+SEARXNG_DST="$FIRECRAWL_INSTALL_DIR/self-host-extras/searxng/settings.yml"
+if [[ -f "$SEARXNG_DST" ]] && cmp -s "$SEARXNG_SRC" "$SEARXNG_DST"; then
+  info "  searxng settings unchanged — skipping copy"
+elif [[ ! -e "$SEARXNG_DST" ]] || [[ -w "$SEARXNG_DST" ]]; then
+  cp "$SEARXNG_SRC" "$SEARXNG_DST"
+else
+  warn "  $SEARXNG_DST owned by another user (likely searxng container UID)"
+  warn "  fix: sudo chown \$(id -u):\$(id -g) $SEARXNG_DST && fireclaude setup"
+  warn "  skipping searxng settings update — continuing with existing file"
+fi
 
 # ── Step 6: write default .env (from env.example, if absent) ─────────────────
 ENV_FILE="$FIRECRAWL_INSTALL_DIR/.env"

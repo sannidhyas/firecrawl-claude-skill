@@ -1,6 +1,6 @@
 {
   "name": "fireclaude",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Self-hosted Firecrawl for Claude Code — scrape, crawl, search, batch-dataset, JSON schema extract via local Ollama. No API keys, no paid tiers.",
   "author": { "name": "sannidhyas" },
   "license": "MIT",
