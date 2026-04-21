@@ -4,6 +4,42 @@ set -euo pipefail
 
 FC_URL="${FIRECRAWL_URL:-http://localhost:3002}"
 
+# ── Ollama endpoint resolution ────────────────────────────────────────────────
+# Inside container → host.docker.internal:11434; on host → localhost:11434.
+# Reads OLLAMA_BASE_URL from .env if available, else falls back to localhost.
+_resolve_ollama_url() {
+  local fc_repo=""
+  fc_repo="$(_resolve_install_dir 2>/dev/null)" || true
+  local env_file="${fc_repo}/.env"
+  local base_url=""
+  if [[ -f "$env_file" ]]; then
+    base_url=$(grep '^OLLAMA_BASE_URL=' "$env_file" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)
+  fi
+  # If OLLAMA_BASE_URL env is set directly, prefer it
+  [[ -n "${OLLAMA_BASE_URL:-}" ]] && base_url="${OLLAMA_BASE_URL}"
+  # Normalise to host-facing URL (strip /api suffix if any, then re-add)
+  base_url="${base_url:-http://localhost:11434/api}"
+  # When running from the host CLI, translate host.docker.internal → localhost
+  base_url="${base_url//host.docker.internal/localhost}"
+  echo "$base_url"
+}
+
+_resolve_ollama_mode() {
+  local fc_repo=""
+  fc_repo="$(_resolve_install_dir 2>/dev/null)" || true
+  local env_file="${fc_repo}/.env"
+  local mode="auto"
+  if [[ -f "$env_file" ]]; then
+    mode=$(grep '^OLLAMA_MODE=' "$env_file" 2>/dev/null | cut -d= -f2- | tr -d '"' || echo "auto")
+  fi
+  [[ -n "${OLLAMA_MODE:-}" ]] && mode="${OLLAMA_MODE}"
+  echo "${mode:-auto}"
+}
+
+_ollama_host_reachable() {
+  curl -sf --max-time 3 http://localhost:11434/api/tags >/dev/null 2>&1
+}
+
 # ── Install dir resolution ────────────────────────────────────────────────────
 # 1. FIRECRAWL_INSTALL_DIR (legacy, keeps backward compat)
 # 2. FIRECLAUDE_INSTALL_DIR (new alias)
@@ -128,7 +164,8 @@ Lifecycle:
   fireclaude teardown [--purge]                           stop + remove stack (--purge skips prompts)
   fireclaude upgrade [--sha GIT_SHA]                      pull latest fireclaude, rebuild, restart
   fireclaude version                                      fireclaude version + firecrawl SHA + models
-  fireclaude doctor [--json]                              dep check + container health + model presence
+  fireclaude doctor [--json]                              dep check + container health + model presence + ollama info
+  fireclaude ollama-start                                 start host ollama via systemd-user (Linux) or brew/launchctl (macOS)
   fireclaude alias install [--yes]                        write alias fc='fireclaude' to ~/.bashrc / ~/.zshrc
   fireclaude alias uninstall [--yes]                      remove the alias from shell rc files
 
@@ -152,6 +189,7 @@ Agent-safe JSON endpoints: fireclaude doctor --json  |  fireclaude status --json
 
 ENV: FIRECRAWL_URL (default $FC_URL)
      FIRECRAWL_INSTALL_DIR / FIRECLAUDE_INSTALL_DIR (install dir, default ~/.fireclaude/firecrawl)
+     OLLAMA_MODE (auto|host|container, default auto)
      CHANGES_DB_PATH (default \$HOME/.fireclaude/changes.db)
      FIRECLAUDE_INSTALL_SH (override install.sh path)
 EOF
@@ -199,9 +237,17 @@ cmd_setup() {
 cmd_start() {
   local fc_repo
   fc_repo="$(_resolve_install_dir)"
-  (cd "$fc_repo" && \
-    COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
-    docker compose --project-name "${_COMPOSE_PROJECT}" up -d)
+  local mode
+  mode="$(_resolve_ollama_mode)"
+  if [[ "$mode" == "container" ]]; then
+    (cd "$fc_repo" && \
+      COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+      docker compose --project-name "${_COMPOSE_PROJECT}" --profile container-ollama up -d)
+  else
+    (cd "$fc_repo" && \
+      COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+      docker compose --project-name "${_COMPOSE_PROJECT}" up -d)
+  fi
 }
 
 cmd_stop() {
@@ -350,9 +396,22 @@ cmd_version() {
     echo "firecrawl SHA: (stack not installed)"
   fi
 
+  local mode
+  mode="$(_resolve_ollama_mode)"
+  local ollama_url
+  ollama_url="$(_resolve_ollama_url)"
+  echo "ollama mode:   $mode"
+  echo "ollama url:    $ollama_url"
+
   echo "ollama models:"
-  docker exec "$OLLAMA_CONTAINER" ollama list 2>/dev/null | tail -n +2 | awk '{print "  " $1}' || \
-    echo "  (ollama container not running)"
+  if [[ "$mode" == "container" ]]; then
+    docker exec "$OLLAMA_CONTAINER" ollama list 2>/dev/null | tail -n +2 | awk '{print "  " $1}' || \
+      echo "  (ollama container not running)"
+  else
+    curl -sf --max-time 5 "${ollama_url%/api}/api/tags" 2>/dev/null \
+      | jq -r '.models[]?.name // empty' 2>/dev/null | awk '{print "  " $1}' || \
+      echo "  (host ollama not reachable at $ollama_url)"
+  fi
 }
 
 cmd_doctor() {
@@ -396,15 +455,64 @@ cmd_doctor() {
 
   # ── model presence ───────────────────────────────────────────────────────────
   local models_json="[]"
-  models_json=$(docker exec "$OLLAMA_CONTAINER" ollama list 2>/dev/null \
-    | tail -n +2 | awk '{print $1}' | jq -Rn '[inputs]') || models_json="[]"
+  local ollama_mode ollama_endpoint ollama_reachable ollama_gpu_detected ollama_gpu_name
+  ollama_mode="$(_resolve_ollama_mode)"
+  ollama_endpoint="$(_resolve_ollama_url)"
+  # Normalise endpoint to root for tags check
+  local tags_url="${ollama_endpoint%/api}/api/tags"
+  if [[ "$ollama_mode" == "container" ]]; then
+    models_json=$(docker exec "$OLLAMA_CONTAINER" ollama list 2>/dev/null \
+      | tail -n +2 | awk '{print $1}' | jq -Rn '[inputs]') || models_json="[]"
+    if docker exec "$OLLAMA_CONTAINER" ollama list >/dev/null 2>&1; then
+      ollama_reachable="true"
+    else
+      ollama_reachable="false"
+    fi
+  else
+    # Host mode — probe via HTTP
+    local tags_resp
+    tags_resp=$(curl -sf --max-time 5 "$tags_url" 2>/dev/null || echo "")
+    if [[ -n "$tags_resp" ]]; then
+      ollama_reachable="true"
+      models_json=$(echo "$tags_resp" | jq '[.models[]?.name // empty]' 2>/dev/null || echo "[]")
+    else
+      ollama_reachable="false"
+      models_json="[]"
+    fi
+  fi
+
+  # GPU detection (best-effort)
+  ollama_gpu_detected="false"
+  ollama_gpu_name=""
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    local gpu_name
+    gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || true)
+    if [[ -n "$gpu_name" ]]; then
+      ollama_gpu_detected="true"
+      ollama_gpu_name="$gpu_name"
+    fi
+  elif [[ -d /dev/dri ]]; then
+    ollama_gpu_detected="true"
+    ollama_gpu_name="unknown (DRI device found)"
+  fi
+
+  local ollama_json
+  ollama_json=$(jq -n \
+    --arg mode "$ollama_mode" \
+    --arg endpoint "$ollama_endpoint" \
+    --argjson reachable "$ollama_reachable" \
+    --argjson models "$models_json" \
+    --argjson gpu_detected "$ollama_gpu_detected" \
+    --arg gpu_name "$ollama_gpu_name" \
+    '{mode: $mode, endpoint: $endpoint, reachable: $reachable, models: $models, gpu: {detected: $gpu_detected, name: $gpu_name}}')
 
   if [[ "$json_out" -eq 1 ]]; then
     jq -n \
       --argjson deps "$deps_json" \
       --argjson containers "$containers_json" \
       --argjson models "$models_json" \
-      '{deps: $deps, containers: $containers, models: $models}'
+      --argjson ollama "$ollama_json" \
+      '{deps: $deps, containers: $containers, models: $models, ollama: $ollama}'
   else
     echo "=== Dependencies ==="
     echo "$deps_json" | jq -r 'to_entries[] | "\(.key): \(.value)"'
@@ -412,9 +520,63 @@ cmd_doctor() {
     echo "=== Containers ==="
     echo "$containers_json" | jq -r '.[] | "\(.service): \(.state)"'
     echo ""
-    echo "=== Ollama Models ==="
-    echo "$models_json" | jq -r '.[]'
+    echo "=== Ollama ==="
+    echo "  mode:      $ollama_mode"
+    echo "  endpoint:  $ollama_endpoint"
+    echo "  reachable: $ollama_reachable"
+    echo "  gpu:       $ollama_gpu_detected ($ollama_gpu_name)"
+    echo "  models:"
+    echo "$models_json" | jq -r '.[]' | awk '{print "    " $1}'
   fi
+}
+
+cmd_ollama_start() {
+  local uname_s
+  uname_s="$(uname -s)"
+  if [[ "$uname_s" == "Linux" ]]; then
+    # Try systemd --user first
+    if systemctl --user is-enabled ollama >/dev/null 2>&1 || systemctl --user status ollama >/dev/null 2>&1; then
+      echo "Starting ollama via systemd --user ..." >&2
+      systemctl --user start ollama || die "systemctl --user start ollama failed"
+    else
+      echo "systemd unit 'ollama' not found — starting via nohup ..." >&2
+      nohup ollama serve >/tmp/ollama-serve.log 2>&1 &
+      echo "ollama serve launched (PID $!, log: /tmp/ollama-serve.log)" >&2
+    fi
+  elif [[ "$uname_s" == "Darwin" ]]; then
+    # Try brew services first, then launchctl
+    if command -v brew >/dev/null 2>&1 && brew list ollama >/dev/null 2>&1; then
+      echo "Starting ollama via brew services ..." >&2
+      brew services start ollama || die "brew services start ollama failed"
+    elif [[ -f "$HOME/Library/LaunchAgents/com.ollama.ollama.plist" ]]; then
+      echo "Starting ollama via launchctl ..." >&2
+      launchctl load "$HOME/Library/LaunchAgents/com.ollama.ollama.plist" || \
+        die "launchctl load failed"
+    else
+      echo "No brew or launchctl plist found — starting via nohup ..." >&2
+      nohup ollama serve >/tmp/ollama-serve.log 2>&1 &
+      echo "ollama serve launched (PID $!, log: /tmp/ollama-serve.log)" >&2
+    fi
+  else
+    die "ollama-start: unsupported OS '$uname_s'. Start ollama manually: ollama serve"
+  fi
+
+  # Wait up to 15s for daemon to become reachable
+  local deadline=$((SECONDS + 15))
+  echo -n "Waiting for ollama at http://localhost:11434 " >&2
+  while [[ $SECONDS -lt $deadline ]]; do
+    if curl -sf --max-time 2 http://localhost:11434/api/tags >/dev/null 2>&1; then
+      echo " ready." >&2
+      local version
+      version=$(curl -sf --max-time 3 http://localhost:11434/api/version 2>/dev/null | jq -r '.version // "unknown"' || echo "unknown")
+      echo "ollama endpoint: http://localhost:11434  version: $version"
+      return 0
+    fi
+    echo -n "." >&2
+    sleep 1
+  done
+  echo "" >&2
+  die "ollama did not become reachable within 15s. Check logs."
 }
 
 # ── Stack commands ────────────────────────────────────────────────────────────
@@ -588,13 +750,33 @@ cmd_extract() {
 cmd_model() {
   local sub="${1:-}"; [[ -n "$sub" ]] || die "model needs: list|pull|swap|current"
   shift
+  local mode
+  mode="$(_resolve_ollama_mode)"
+  local ollama_url
+  ollama_url="$(_resolve_ollama_url)"
+  # Base URL without /api suffix for raw API calls
+  local ollama_base="${ollama_url%/api}"
+
   case "$sub" in
     list)
-      docker exec "$OLLAMA_CONTAINER" ollama list | tail -n +2 | awk '{print $1}' | jq -Rn '[inputs]'
+      if [[ "$mode" == "container" ]]; then
+        docker exec "$OLLAMA_CONTAINER" ollama list | tail -n +2 | awk '{print $1}' | jq -Rn '[inputs]'
+      else
+        curl -sf --max-time 10 "$ollama_base/api/tags" 2>/dev/null \
+          | jq '[.models[]?.name // empty]' 2>/dev/null || echo "[]"
+      fi
       ;;
     pull)
       [[ $# -ge 1 ]] || die "model pull needs <name>"
-      docker exec "$OLLAMA_CONTAINER" ollama pull "$1"
+      local model_name="$1"
+      if [[ "$mode" == "container" ]]; then
+        docker exec "$OLLAMA_CONTAINER" ollama pull "$model_name"
+      else
+        echo "Pulling $model_name via host ollama at $ollama_base ..." >&2
+        curl -sS -X POST "$ollama_base/api/pull" \
+          -H 'Content-Type: application/json' \
+          -d "{\"name\":\"$model_name\"}" | tail -1
+      fi
       ;;
     swap)
       [[ $# -ge 1 ]] || die "model swap needs <name>"
@@ -602,8 +784,14 @@ cmd_model() {
       local fc_repo; fc_repo="$(_resolve_install_dir)"
       local env_file="$fc_repo/.env"
       [[ -f "$env_file" ]] || die "no .env at $env_file"
-      echo "Pulling $name into ollama container..." >&2
-      docker exec "$OLLAMA_CONTAINER" ollama pull "$name"
+      echo "Pulling $name ..." >&2
+      if [[ "$mode" == "container" ]]; then
+        docker exec "$OLLAMA_CONTAINER" ollama pull "$name"
+      else
+        curl -sS -X POST "$ollama_base/api/pull" \
+          -H 'Content-Type: application/json' \
+          -d "{\"name\":\"$name\"}" | tail -1
+      fi
       sed -i "s/^MODEL_NAME=.*/MODEL_NAME=$name/" "$env_file"
       echo "Updated MODEL_NAME=$name in $env_file" >&2
       (cd "$fc_repo" && \
@@ -744,6 +932,7 @@ main() {
     upgrade)        cmd_upgrade "$@" ;;
     version)        cmd_version "$@" ;;
     doctor)         cmd_doctor "$@" ;;
+    ollama-start)   cmd_ollama_start "$@" ;;
     health)         cmd_health "$@" ;;
     status)         cmd_status "$@" ;;
     logs)           cmd_logs "$@" ;;

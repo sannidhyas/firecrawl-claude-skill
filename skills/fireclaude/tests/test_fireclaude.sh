@@ -211,15 +211,22 @@ else
 fi
 
 # ── Test 11: fireclaude doctor --json — shape check ──────────────────────────
-info "Test 11: fireclaude doctor --json (keys: deps, containers, models)"
+info "Test 11: fireclaude doctor --json (keys: deps, containers, models, ollama)"
 DOCTOR_OUT=$("$FIRECLAUDE_BIN" doctor --json 2>/dev/null || echo "{}")
 if require_json "$DOCTOR_OUT"; then
   HAS_DEPS=$(echo "$DOCTOR_OUT" | jq 'has("deps")')
   HAS_CONTAINERS=$(echo "$DOCTOR_OUT" | jq 'has("containers")')
   HAS_MODELS=$(echo "$DOCTOR_OUT" | jq 'has("models")')
+  HAS_OLLAMA=$(echo "$DOCTOR_OUT" | jq 'has("ollama")')
   if [[ "$HAS_DEPS" == "true" && "$HAS_CONTAINERS" == "true" && "$HAS_MODELS" == "true" ]]; then
     DOCKER_OK=$(echo "$DOCTOR_OUT" | jq -r '.deps.docker')
-    pass "fireclaude doctor --json has deps/containers/models keys (docker=$DOCKER_OK)"
+    if [[ "$HAS_OLLAMA" == "true" ]]; then
+      OLLAMA_MODE=$(echo "$DOCTOR_OUT" | jq -r '.ollama.mode // "unknown"')
+      OLLAMA_REACHABLE=$(echo "$DOCTOR_OUT" | jq -r '.ollama.reachable // "unknown"')
+      pass "fireclaude doctor --json has deps/containers/models/ollama keys (docker=$DOCKER_OK ollama.mode=$OLLAMA_MODE reachable=$OLLAMA_REACHABLE)"
+    else
+      pass "fireclaude doctor --json has deps/containers/models keys (docker=$DOCKER_OK) — ollama key absent (warn)"
+    fi
   else
     fail "fireclaude doctor --json missing keys (deps=$HAS_DEPS containers=$HAS_CONTAINERS models=$HAS_MODELS)"
   fi

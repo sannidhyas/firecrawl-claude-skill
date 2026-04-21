@@ -1,4 +1,6 @@
-# Fireclaude
+<p align="center"><img src="assets/logo.svg" width="160"/></p>
+<h1 align="center">fireclaude</h1>
+<p align="center">Self-hosted Firecrawl for Claude Code — no API keys, no paid tiers.</p>
 
 Self-hosted [Firecrawl](https://github.com/firecrawl/firecrawl) packaged as a Claude Code skill. Scrape, crawl, search, batch-dataset, JSON-schema extract, change tracking, webhook testing — all local, no API keys, no paid tiers.
 
@@ -50,7 +52,8 @@ The skill activates automatically when you ask Claude to scrape, crawl, search t
 | `fireclaude teardown [--purge]` | Stop + remove stack. `--purge` auto-answers yes to all prompts |
 | `fireclaude upgrade [--sha GIT_SHA]` | Pull latest fireclaude npm, optionally pin firecrawl to SHA, rebuild, restart |
 | `fireclaude version` | fireclaude version + installed firecrawl SHA + ollama models |
-| `fireclaude doctor [--json]` | Dep check + container health + model presence. `--json` for agent use |
+| `fireclaude doctor [--json]` | Dep check + container health + model presence + ollama mode/endpoint. `--json` for agent use |
+| `fireclaude ollama-start` | Start host ollama via systemd-user (Linux) or brew services / launchctl (macOS) |
 | `fireclaude alias install [--yes]` | Write `alias fc='fireclaude'` to `~/.bashrc` / `~/.zshrc` |
 | `fireclaude alias uninstall [--yes]` | Remove the alias from shell rc files |
 
@@ -193,6 +196,10 @@ Six `git diff` patches in `docker/patches/` are applied against firecrawl SHA `0
 fireclaude teardown           # stop + prompt to remove clone + volumes
 fireclaude teardown --purge   # stop + remove everything without prompts
 ```
+
+## Versioning
+
+fireclaude follows SemVer. The project is currently pre-stable (0.x). See [VERSIONING.md](VERSIONING.md) for the 0.x → 1.0.0 stability checklist.
 
 ## Contributing
 

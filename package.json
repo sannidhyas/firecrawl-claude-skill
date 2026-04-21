@@ -1,6 +1,6 @@
 {
   "name": "fireclaude",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Self-hosted Firecrawl Claude Code skill — scrape, crawl, search, extract, change tracking, webhook testing, model swap. No API keys.",
   "bin": {
     "fireclaude": "./skills/fireclaude/scripts/fireclaude-bin.js"
@@ -8,6 +8,7 @@
   "files": [
     "skills/**",
     "docker/**",
+    "assets/**",
     "install.sh",
     "uninstall.sh",
     "README.md",
@@ -16,6 +17,11 @@
   ],
   "scripts": {
     "postinstall": "node -e \"console.log('\\n  fireclaude installed.\\n  Bootstrap the stack: fireclaude setup\\n  Then check status: fireclaude status\\n  Optional short alias: fireclaude alias install\\n')\""
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "gradient-string": "^2.0.2",
+    "ora": "^8.0.1"
   },
   "repository": {
     "type": "git",

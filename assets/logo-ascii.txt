@@ -1,0 +1,9 @@
+        )
+       ) \
+      / ) (
+      \(_)/        fireclaude
+   .-'----'-.
+  /  flame   \    Self-hosted Firecrawl
+ |  + claude  |   for Claude Code
+  \          /
+   '--------'

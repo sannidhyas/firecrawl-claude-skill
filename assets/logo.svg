@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="flameOuter" x1="0%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" style="stop-color:#ea580c"/>
+      <stop offset="100%" style="stop-color:#f97316"/>
+    </linearGradient>
+    <linearGradient id="flameInner" x1="0%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" style="stop-color:#fbbf24"/>
+      <stop offset="100%" style="stop-color:#fde047"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer flame -->
+  <path d="M256 60
+    C256 60 310 120 320 180
+    C330 240 300 270 310 310
+    C320 350 360 370 350 420
+    C340 460 295 480 256 480
+    C217 480 172 460 162 420
+    C152 370 192 350 202 310
+    C212 270 182 240 192 180
+    C202 120 256 60 256 60Z"
+    fill="url(#flameOuter)"/>
+
+  <!-- Inner flame -->
+  <path d="M256 140
+    C256 140 290 185 295 225
+    C300 265 278 285 285 320
+    C292 350 318 365 312 400
+    C306 430 283 445 256 445
+    C229 445 206 430 200 400
+    C194 365 220 350 227 320
+    C234 285 212 265 217 225
+    C222 185 256 140 256 140Z"
+    fill="url(#flameInner)"/>
+
+  <!-- Wordmark -->
+  <text x="256" y="505" font-family="system-ui, -apple-system, sans-serif" font-size="42" font-weight="700"
+        fill="#8b5cf6" text-anchor="middle" letter-spacing="-1">fireclaude</text>
+</svg>

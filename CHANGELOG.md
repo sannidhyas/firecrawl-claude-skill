@@ -6,6 +6,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), [Semantic Vers
 
 ---
 
+## [0.6.0] — 2026-04-21 — ollama host mode + logo + TUI
+
+- **OLLAMA_MODE** env (`auto`|`host`|`container`). `auto` (default) probes host daemon at `http://localhost:11434`; skips the bundled container when reachable. `host` fails setup if unreachable. `container` preserves previous behaviour.
+- **`fireclaude ollama-start`** — launch host ollama via `systemctl --user` (Linux) or `brew services` / `launchctl` (macOS). Falls back to `nohup ollama serve` when no service manager entry found.
+- **Logo**: `assets/logo.svg` (512×512 SVG, flame + purple wordmark) + `assets/logo-ascii.txt`. README header updated.
+- **CLI animations**: `ora` spinner on long ops (`setup`, `start`, `upgrade`). `gradient-string` fire gradient on ASCII splash. `chalk` for colour. Degrades to plain text when `!process.stdout.isTTY`, `NO_COLOR=1`, or `--no-animate`.
+- **`fireclaude doctor --json`** now includes `.ollama = { mode, endpoint, reachable, models, gpu: { detected, name } }`.
+- **`fireclaude model list|pull`** route to host daemon when `OLLAMA_MODE` is `host` or `auto` (resolved to host).
+- **VERSIONING.md** — documents 0.x → 1.0.0 stability path.
+
+No breaking changes from 0.5.0.
+
+---
+
 ## [0.5.0] — 2026-04-21 — rename binary to `fireclaude`
 
 **Breaking:** the `fc` binary shipped by npm is renamed to `fireclaude` to avoid

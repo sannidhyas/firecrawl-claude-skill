@@ -17,14 +17,29 @@ export COMPOSE_PROJECT_NAME
 # Container name prefix follows the compose project name.
 OLLAMA_CONTAINER="${COMPOSE_PROJECT_NAME}-ollama-1"
 
+# OLLAMA_MODE: auto (default) | host | container
+OLLAMA_MODE="${OLLAMA_MODE:-auto}"
+
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info()    { echo -e "${GREEN}[install]${NC} $*"; }
 warn()    { echo -e "${YELLOW}[warn]${NC} $*"; }
 die()     { echo -e "${RED}[error]${NC} $*" >&2; exit 1; }
 pass()    { echo -e "${GREEN}PASS${NC} $1"; }
 fail_msg(){ echo -e "${RED}FAIL${NC} $1"; }
+# @stage: protocol — consumed by fireclaude-bin.js ora wrapper
+stage()   { echo "@stage: $*" >&2; }
+
+# ── Step 0: print splash ──────────────────────────────────────────────────────
+LOGO_ASCII="${PLUGIN_ROOT}/assets/logo-ascii.txt"
+if [[ -f "$LOGO_ASCII" ]]; then
+  cat "$LOGO_ASCII"
+  echo ""
+fi
+info "fireclaude setup — version $(node -e "try{process.stdout.write(require('${PLUGIN_ROOT}/package.json').version)}catch(e){process.stdout.write('?')}" 2>/dev/null || echo '?')"
+echo ""
 
 # ── Step 1: dependency check ──────────────────────────────────────────────────
+stage "deps-check"
 info "Checking dependencies..."
 for dep in docker git curl jq python3; do
   command -v "$dep" >/dev/null 2>&1 || \
@@ -40,7 +55,50 @@ CHANGES_DB_DIR="$(dirname "$CHANGES_DB_DIR")"
 mkdir -p "$CHANGES_DB_DIR"
 info "Change-tracking DB dir: $CHANGES_DB_DIR"
 
+# ── Step 1c: resolve ollama mode ──────────────────────────────────────────────
+stage "ollama-mode"
+_host_ollama_reachable() {
+  curl -sf --max-time 3 http://localhost:11434/api/tags >/dev/null 2>&1
+}
+
+EFFECTIVE_OLLAMA_MODE="container"
+OLLAMA_BASE_URL_OVERRIDE=""
+
+case "$OLLAMA_MODE" in
+  host)
+    info "OLLAMA_MODE=host — checking host daemon at http://localhost:11434 ..."
+    if _host_ollama_reachable; then
+      info "Host ollama reachable. Using host daemon."
+      EFFECTIVE_OLLAMA_MODE="host"
+      OLLAMA_BASE_URL_OVERRIDE="http://host.docker.internal:11434/api"
+    else
+      die "OLLAMA_MODE=host but host ollama is unreachable at http://localhost:11434. Start it with: fireclaude ollama-start"
+    fi
+    ;;
+  auto)
+    info "OLLAMA_MODE=auto — probing host daemon at http://localhost:11434 ..."
+    if _host_ollama_reachable; then
+      info "Host ollama reachable. Skipping container — using host daemon (mode: host)."
+      EFFECTIVE_OLLAMA_MODE="host"
+      OLLAMA_BASE_URL_OVERRIDE="http://host.docker.internal:11434/api"
+    else
+      info "Host ollama not reachable. Falling back to container mode."
+      EFFECTIVE_OLLAMA_MODE="container"
+    fi
+    ;;
+  container)
+    info "OLLAMA_MODE=container — will start bundled ollama container."
+    EFFECTIVE_OLLAMA_MODE="container"
+    ;;
+  *)
+    die "Unknown OLLAMA_MODE='$OLLAMA_MODE'. Valid values: auto | host | container"
+    ;;
+esac
+
+info "Effective ollama mode: $EFFECTIVE_OLLAMA_MODE"
+
 # ── Step 2: clone firecrawl ───────────────────────────────────────────────────
+stage "clone"
 if [[ -d "$FIRECRAWL_INSTALL_DIR/.git" ]]; then
   warn "Firecrawl repo already exists at $FIRECRAWL_INSTALL_DIR — skipping clone."
 else
@@ -56,6 +114,7 @@ git -C "$FIRECRAWL_INSTALL_DIR" checkout --quiet "$FIRECRAWL_PINNED_SHA" || \
   die "Could not checkout $FIRECRAWL_PINNED_SHA. Try: git -C $FIRECRAWL_INSTALL_DIR fetch --all"
 
 # ── Step 4: apply patches ─────────────────────────────────────────────────────
+stage "patches"
 info "Applying patches..."
 for patch in "$PLUGIN_ROOT/docker/patches/"*.patch; do
   pname=$(basename "$patch")
@@ -114,18 +173,46 @@ else
   sed -i "s/^MODEL_NAME=.*/MODEL_NAME=${MODEL_NAME}/" "$ENV_FILE"
 fi
 
+# In host / auto-resolved-host mode, set OLLAMA_BASE_URL so the api container
+# reaches the host daemon via host.docker.internal.
+if [[ "$EFFECTIVE_OLLAMA_MODE" == "host" ]]; then
+  if grep -q '^OLLAMA_BASE_URL=' "$ENV_FILE" 2>/dev/null; then
+    sed -i "s|^OLLAMA_BASE_URL=.*|OLLAMA_BASE_URL=${OLLAMA_BASE_URL_OVERRIDE}|" "$ENV_FILE"
+  else
+    echo "OLLAMA_BASE_URL=${OLLAMA_BASE_URL_OVERRIDE}" >> "$ENV_FILE"
+  fi
+  # Persist mode for doctor / fc to read
+  if grep -q '^OLLAMA_MODE=' "$ENV_FILE" 2>/dev/null; then
+    sed -i "s/^OLLAMA_MODE=.*/OLLAMA_MODE=host/" "$ENV_FILE"
+  else
+    echo "OLLAMA_MODE=host" >> "$ENV_FILE"
+  fi
+  info "OLLAMA_BASE_URL set to $OLLAMA_BASE_URL_OVERRIDE in $ENV_FILE"
+fi
+
 # ── Step 7: docker build + up ─────────────────────────────────────────────────
+stage "build"
 info "Building images (cache ok — may take a few minutes on first run)..."
 (cd "$FIRECRAWL_INSTALL_DIR" && \
   COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" \
   docker compose --project-name "$COMPOSE_PROJECT_NAME" build api playwright-service)
 
+stage "up"
 info "Starting stack..."
-(cd "$FIRECRAWL_INSTALL_DIR" && \
-  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" \
-  docker compose --project-name "$COMPOSE_PROJECT_NAME" up -d)
+if [[ "$EFFECTIVE_OLLAMA_MODE" == "container" ]]; then
+  (cd "$FIRECRAWL_INSTALL_DIR" && \
+    COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" \
+    COMPOSE_PROFILES="container-ollama" \
+    docker compose --project-name "$COMPOSE_PROJECT_NAME" --profile container-ollama up -d)
+else
+  # Host mode — no ollama container needed
+  (cd "$FIRECRAWL_INSTALL_DIR" && \
+    COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" \
+    docker compose --project-name "$COMPOSE_PROJECT_NAME" up -d)
+fi
 
 # ── Step 8: wait for API ──────────────────────────────────────────────────────
+stage "health"
 API_URL="http://localhost:${PORT}"
 info "Waiting for Firecrawl API at $API_URL (up to 180s)..."
 DEADLINE=$((SECONDS + 180))
@@ -146,15 +233,33 @@ if [[ $SECONDS -ge $DEADLINE ]]; then
 fi
 
 # ── Step 9: pull ollama models ────────────────────────────────────────────────
-info "Pulling Ollama model $MODEL_NAME (~2 GB on first run, cached after)..."
-docker exec "$OLLAMA_CONTAINER" ollama pull "$MODEL_NAME" || \
-  warn "Ollama pull for $MODEL_NAME failed. Run manually: docker exec $OLLAMA_CONTAINER ollama pull $MODEL_NAME"
+stage "pull"
+if [[ "$EFFECTIVE_OLLAMA_MODE" == "container" ]]; then
+  info "Pulling Ollama model $MODEL_NAME (~2 GB on first run, cached after)..."
+  docker exec "$OLLAMA_CONTAINER" ollama pull "$MODEL_NAME" || \
+    warn "Ollama pull for $MODEL_NAME failed. Run manually: docker exec $OLLAMA_CONTAINER ollama pull $MODEL_NAME"
 
-info "Pulling nomic-embed-text embedding model..."
-docker exec "$OLLAMA_CONTAINER" ollama pull nomic-embed-text || \
-  warn "nomic-embed-text pull failed. Run: docker exec $OLLAMA_CONTAINER ollama pull nomic-embed-text"
+  info "Pulling nomic-embed-text embedding model..."
+  docker exec "$OLLAMA_CONTAINER" ollama pull nomic-embed-text || \
+    warn "nomic-embed-text pull failed. Run: docker exec $OLLAMA_CONTAINER ollama pull nomic-embed-text"
+else
+  # Host mode — pull via HTTP API on the host daemon
+  _OLLAMA_HOST_URL="http://localhost:11434"
+  info "Pulling $MODEL_NAME via host ollama at $_OLLAMA_HOST_URL ..."
+  curl -sS -X POST "$_OLLAMA_HOST_URL/api/pull" \
+    -H 'Content-Type: application/json' \
+    -d "{\"name\":\"$MODEL_NAME\"}" | tail -1 || \
+    warn "Host ollama pull for $MODEL_NAME may have failed. Run: ollama pull $MODEL_NAME"
+
+  info "Pulling nomic-embed-text via host ollama ..."
+  curl -sS -X POST "$_OLLAMA_HOST_URL/api/pull" \
+    -H 'Content-Type: application/json' \
+    -d '{"name":"nomic-embed-text"}' | tail -1 || \
+    warn "Host ollama pull for nomic-embed-text may have failed."
+fi
 
 # ── Step 10: smoke tests ──────────────────────────────────────────────────────
+stage "smoke"
 info "Running smoke tests..."
 ALL_PASS=true
 
@@ -217,9 +322,10 @@ else
   echo -e "${YELLOW}install complete — some smoke tests failed (see above)${NC}"
 fi
 echo ""
-echo "API:       $API_URL"
-echo "Stack dir: $FIRECRAWL_INSTALL_DIR"
-echo "Project:   $COMPOSE_PROJECT_NAME"
+echo "API:          $API_URL"
+echo "Stack dir:    $FIRECRAWL_INSTALL_DIR"
+echo "Project:      $COMPOSE_PROJECT_NAME"
+echo "Ollama mode:  $EFFECTIVE_OLLAMA_MODE"
 echo ""
 echo "Next steps:"
 echo "  Add skill to Claude Code: /plugin add $PLUGIN_ROOT"

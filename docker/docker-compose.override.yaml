@@ -27,7 +27,11 @@ services:
         max-size: "5m"
         max-file: "2"
 
+  # Bundled ollama — only starts when COMPOSE_PROFILES includes container-ollama.
+  # In host or auto-resolved-host mode, this service is skipped entirely.
   ollama:
+    profiles:
+      - container-ollama
     image: ollama/ollama:latest
     networks:
       - backend
@@ -64,11 +68,13 @@ services:
     memswap_limit: 6G
 
   api:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       SEARXNG_ENDPOINT: http://searxng:8080
       SEARXNG_ENGINES: google,bing,duckduckgo
       SEARXNG_CATEGORIES: general
-      OLLAMA_BASE_URL: http://ollama:11434/api
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434/api}
       MODEL_NAME: ${MODEL_NAME:-llama3.2:3b}
       MODEL_EMBEDDING_NAME: ${MODEL_EMBEDDING_NAME:-nomic-embed-text}
       ALLOW_LOCAL_WEBHOOKS: "true"
@@ -80,6 +86,4 @@ services:
       rabbitmq:
         condition: service_healthy
       searxng:
-        condition: service_started
-      ollama:
         condition: service_started
