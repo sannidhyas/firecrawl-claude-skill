@@ -1,5 +1,3 @@
-# Pinned upstream SHA: 0ae6387b762c7450190eb7d8f9f7b81b7adfcaab
-# Apply with: git apply --3way docker/patches/engines-index.ts.patch
 diff --git a/apps/api/src/scraper/scrapeURL/engines/index.ts b/apps/api/src/scraper/scrapeURL/engines/index.ts
 index 9f17ff6..4588894 100644
 --- a/apps/api/src/scraper/scrapeURL/engines/index.ts
@@ -19,7 +17,7 @@ index 9f17ff6..4588894 100644
 @@ -561,6 +564,18 @@ export async function buildFallbackList(meta: Meta): Promise<
        }
      }
-
+ 
 +    // Specialty engines (pdf, document) must only run when their feature flag is
 +    // explicitly requested. Without this guard, adding `stealthProxy` after a CF
 +    // 403 causes the next iteration to select these engines for plain HTML URLs

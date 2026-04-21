@@ -1,5 +1,3 @@
-# Pinned upstream SHA: 0ae6387b762c7450190eb7d8f9f7b81b7adfcaab
-# Apply with: git apply --3way docker/patches/generic-ai.ts.patch
 diff --git a/apps/api/src/lib/generic-ai.ts b/apps/api/src/lib/generic-ai.ts
 index 4c6acd5..0531c42 100644
 --- a/apps/api/src/lib/generic-ai.ts
@@ -25,7 +23,7 @@ index 4c6acd5..0531c42 100644
    google, //GOOGLE_GENERATIVE_AI_API_KEY
 @@ -54,6 +60,11 @@ const providerList: Record<Provider, any> = {
  };
-
+ 
  export function getModel(name: string, provider: Provider = defaultProvider) {
 +  // self-host override: when OLLAMA_BASE_URL is wired, always route via ollama
 +  // regardless of hard-coded "openai" provider args scattered across extract call sites.
@@ -45,3 +43,4 @@ index 4c6acd5..0531c42 100644
 +  }
    return providerList[provider](modelName);
  }
+ 
