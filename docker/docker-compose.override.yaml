@@ -1,7 +1,12 @@
 # Self-host parity extras:
 #  - searxng  → /v2/search
 #  - ollama   → /v2/scrape with format: {type:"json", schema:...}
-#  - tor      → PROXY_SERVER for Cloudflare mitigation (free, limited)
+#
+# NOTE: Tor is intentionally excluded from this plugin.
+# For IP rotation, supply your own proxy via PROXY_SERVER env var
+# (e.g. PROXY_SERVER=socks5://your-proxy:1080 in .env).
+# Integrated Tor was trialled and dropped due to unreliable bootstrap
+# on many networks and Cloudflare pre-blocking most exit nodes.
 services:
   searxng:
     image: searxng/searxng:latest
@@ -40,20 +45,6 @@ services:
     #         - driver: nvidia
     #           count: all
     #           capabilities: [gpu]
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "2"
-
-  tor:
-    image: dperson/torproxy:latest
-    networks:
-      - backend
-    environment:
-      TOR_NewCircuitPeriod: "60"
-      TOR_MaxCircuitDirtiness: "120"
-    restart: unless-stopped
     logging:
       driver: "json-file"
       options:

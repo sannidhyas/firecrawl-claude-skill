@@ -1,6 +1,6 @@
-# Never commit the install dir or nested clone
+# Never commit the install dir or upstream clone
 .firecrawl-claude-skill/
-firecrawl/
+/firecrawl/
 
 # Logs
 *.log

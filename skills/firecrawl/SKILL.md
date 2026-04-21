@@ -14,11 +14,10 @@ Stack (8 containers):
 | Service | Role |
 |---|---|
 | `api` | Firecrawl REST API |
-| `playwright-service` | JS rendering |
+| `playwright-service` | JS rendering (playwright-extra + stealth) |
 | `redis`, `rabbitmq`, `nuq-postgres` | queue / state |
 | **`searxng`** | Local web search → `/v2/search` |
 | **`ollama`** | Local LLM (`llama3.2:3b`) → JSON schema extract |
-| **`tor`** | Optional SOCKS proxy for IP rotation (opt-in, may be ISP-blocked) |
 
 ## Capability parity vs Firecrawl Cloud
 
@@ -30,13 +29,13 @@ Stack (8 containers):
 | `/v2/search` | via managed search | ✅ via SearxNG |
 | JSON-schema extract (`formats:[{type:"json",schema}]`) | GPT-4o | ✅ via Ollama `llama3.2:3b` |
 | Actions (click, wait, scroll) | ✅ | ✅ (Playwright) |
-| Fire-engine anti-bot bypass | ✅ | ❌ (cloud-only) — partial via Tor proxy |
+| Fire-engine anti-bot bypass | ✅ | ❌ (cloud-only) |
 | Change Tracking / Deep Research | ✅ | ❌ (cloud-only) |
 | Webhooks (`SELF_HOSTED_WEBHOOK_URL`) | ✅ | ✅ |
 
 ## Commands
 
-Wrapper script at `$CLAUDE_PLUGIN_ROOT/skills/firecrawl/scripts/fc` (symlink or add to PATH after install).
+Wrapper script at `${CLAUDE_PLUGIN_ROOT}/skills/firecrawl/scripts/fc` (symlink or add to PATH after install).
 
 | Action | Command |
 |---|---|
@@ -47,12 +46,12 @@ Wrapper script at `$CLAUDE_PLUGIN_ROOT/skills/firecrawl/scripts/fc` (symlink or 
 | Crawl site | `fc crawl <url> [--limit N] [--out dir]` |
 | Health | `fc health` |
 | Stack status | `fc status` |
-| Stack logs | `fc logs [api\|playwright-service\|searxng\|ollama\|tor]` |
+| Stack logs | `fc logs [api\|playwright-service\|searxng\|ollama]` |
 
 ## Dataset pipeline
 
 ```
-python3 $CLAUDE_PLUGIN_ROOT/skills/firecrawl/scripts/batch-dataset.py \
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/firecrawl/scripts/batch-dataset.py \
     --urls urls.txt --out dataset.jsonl --format markdown --only-main
 ```
 
@@ -112,7 +111,7 @@ Self-host has no Fire-engine. Per-site success rate on Cloudflare sites ~40–50
 
 1. **Retry**: Cloudflare returns `SCRAPE_RETRY_LIMIT` → `document_antibot` intermittently; same URL on 2nd-3rd try often succeeds.
 2. **waitFor + actions**: `{waitFor: 5000, actions: [{type:"wait", milliseconds:3000}, {type:"scrape"}]}`.
-3. **Tor proxy (opt-in)**: edit `.env` → `PROXY_SERVER=socks5://tor:9050`, then `docker compose up -d --force-recreate playwright-service`. Caveat: many Tor exits are pre-blocked by Cloudflare; upstream ISPs may block Tor relay traffic outright. Verify bootstrap with `docker logs firecrawl-tor-1 | grep Bootstrapped`.
+3. **Custom proxy**: set `PROXY_SERVER=socks5://your-proxy:1080` in `.env`, then `docker compose up -d --force-recreate playwright-service`. For IP rotation, bring your own proxy — integrated Tor was trialled and dropped due to unreliable bootstrap on many networks and Cloudflare pre-blocking most exit nodes.
 
 ## Stack control
 
@@ -130,13 +129,13 @@ Files layered on top of upstream repo:
 $FIRECRAWL_INSTALL_DIR/
 ├── .env                                  # tunables, MODEL_NAME, PROXY_SERVER
 ├── docker-compose.yaml                   # upstream (do not edit)
-├── docker-compose.override.yaml          # self-host extras: searxng, ollama, tor
+├── docker-compose.override.yaml          # self-host extras: searxng, ollama
 └── self-host-extras/
     ├── searxng/settings.yml              # JSON output enabled
     └── ollama-data/                      # model cache volume
 ```
 
-Source patches are in `$CLAUDE_PLUGIN_ROOT/docker/patches/`. Applied at install time via `git apply --3way`.
+Source patches are in `${CLAUDE_PLUGIN_ROOT}/docker/patches/`. Applied at install time via `git apply --3way`.
 
 ## When to invoke
 

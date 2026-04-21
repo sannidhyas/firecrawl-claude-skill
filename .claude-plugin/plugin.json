@@ -1,7 +1,7 @@
 {
   "name": "firecrawl-claude-skill",
   "version": "0.1.0",
-  "description": "Self-hosted Firecrawl as a Claude Code skill — scrape, crawl, search, batch-dataset, JSON extract via local Ollama. No API keys, no paid tiers.",
+  "description": "Self-hosted Firecrawl for Claude Code — scrape, crawl, search, batch-dataset, JSON schema extract via local Ollama. No API keys, no paid tiers.",
   "author": { "name": "sannidhyas" },
   "license": "MIT",
   "homepage": "https://github.com/sannidhyas/firecrawl-claude-skill"

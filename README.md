@@ -2,13 +2,13 @@
 
 Self-hosted [Firecrawl](https://github.com/firecrawl/firecrawl) packaged as a Claude Code skill. Scrape, crawl, search, batch-dataset, and JSON-schema extract — all local, no API keys, no paid tiers.
 
-Stack: Firecrawl API + Playwright (stealth) + SearxNG (search) + Ollama (llama3.2:3b, JSON extract) + optional Tor proxy.
+Stack: Firecrawl API + Playwright (stealth) + SearxNG (search) + Ollama (llama3.2:3b, JSON extract).
 
 ## TL;DR install
 
 ```bash
-# one-liner
-curl -sSL https://raw.githubusercontent.com/sannidhyas/firecrawl-claude-skill/main/install.sh | bash
+# one-liner (pinned release)
+curl -sSL https://raw.githubusercontent.com/sannidhyas/firecrawl-claude-skill/v0.1.0/install.sh | bash
 
 # or clone first
 git clone https://github.com/sannidhyas/firecrawl-claude-skill
@@ -79,10 +79,10 @@ Routes through `ollama` container (llama3.2:3b by default). First request cold-s
 | Limit | Detail |
 |---|---|
 | Cloudflare 403 | No Fire-engine; CF IP reputation blocks ~50–60% of CF-protected pages. Retries help (~40–50% success on retry). Use `waitFor` + `actions` for JS-challenge pages. |
-| Tor exits blocked | Many Tor exit nodes are pre-blocked by Cloudflare. ISPs may block Tor relay port 9001. Opt-in only (`PROXY_SERVER=socks5://tor:9050`). |
 | No Fire-engine | Cloud-only antibot bypass not available self-hosted. |
 | No Change Tracking | Cloud-only feature. |
 | No Deep Research | Cloud-only feature. |
+| IP rotation | For datacenter IPs blocked by Cloudflare, bring your own proxy via `PROXY_SERVER` env. Integrated Tor was trialled and dropped due to unreliable bootstrap on many networks and Cloudflare pre-blocking most exit nodes. |
 | LLM quality | llama3.2:3b (3B params) extracts simple schemas well; complex multi-field structured extraction may need qwen2.5:7b or larger. |
 | First model pull | ~2 GB download on first install. Subsequent starts are instant (models cached in docker volume). |
 

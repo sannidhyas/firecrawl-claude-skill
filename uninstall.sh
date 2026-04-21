@@ -14,19 +14,38 @@ if [[ ! -d "$FIRECRAWL_INSTALL_DIR" ]]; then
   exit 0
 fi
 
-info "Stopping and removing containers (project: $COMPOSE_PROJECT_NAME)..."
+# ── Step 1: docker compose down -v ────────────────────────────────────────────
+info "Stopping containers and removing volumes (project: $COMPOSE_PROJECT_NAME)..."
 (cd "$FIRECRAWL_INSTALL_DIR" && \
   COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" \
-  docker compose --project-name "$COMPOSE_PROJECT_NAME" down --remove-orphans) || \
+  docker compose --project-name "$COMPOSE_PROJECT_NAME" down -v --remove-orphans) || \
   warn "docker compose down failed — containers may already be stopped."
 
+# ── Step 2: prompt to remove clone dir (default No) ──────────────────────────
 echo ""
-echo "Containers removed. Data volumes (ollama models, redis, postgres) are preserved."
+read -r -p "Remove clone directory $FIRECRAWL_INSTALL_DIR? [y/N] " _remove_clone
+_remove_clone="${_remove_clone:-N}"
+if [[ "$_remove_clone" =~ ^[Yy]$ ]]; then
+  info "Removing $FIRECRAWL_INSTALL_DIR ..."
+  rm -rf "$FIRECRAWL_INSTALL_DIR"
+  info "Clone directory removed."
+else
+  info "Keeping clone directory at $FIRECRAWL_INSTALL_DIR."
+fi
+
+# ── Step 3: prompt to remove ollama-data volume (default No) ─────────────────
 echo ""
-echo "To also remove volumes:"
-echo "  cd $FIRECRAWL_INSTALL_DIR && docker compose --project-name $COMPOSE_PROJECT_NAME down -v"
-echo ""
-echo "To fully remove the install directory:"
-echo "  rm -rf $FIRECRAWL_INSTALL_DIR"
+_ollama_vol="${COMPOSE_PROJECT_NAME}_ollama-data"
+if docker volume ls -q | grep -q "^${_ollama_vol}$" 2>/dev/null; then
+  read -r -p "Remove ollama model cache volume '${_ollama_vol}'? [y/N] " _remove_ollama
+  _remove_ollama="${_remove_ollama:-N}"
+  if [[ "$_remove_ollama" =~ ^[Yy]$ ]]; then
+    docker volume rm "$_ollama_vol" && info "Volume ${_ollama_vol} removed." || \
+      warn "Could not remove volume ${_ollama_vol} — may still be in use."
+  else
+    info "Keeping ollama model cache volume '${_ollama_vol}' (saves re-downloading models)."
+  fi
+fi
+
 echo ""
 info "Uninstall complete."
