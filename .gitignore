@@ -9,6 +9,7 @@ logs/
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 .venv/
 venv/
 *.egg-info/

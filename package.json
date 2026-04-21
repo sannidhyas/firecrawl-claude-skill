@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "description": "Self-hosted Firecrawl Claude Code skill — scrape, crawl, search, extract, change tracking, webhook testing, model swap. No API keys.",
   "bin": {
-    "fc": "./skills/firecrawl/scripts/fc"
+    "fc": "./skills/firecrawl/scripts/fc-bin.js"
   },
   "files": [
     "skills/**",
