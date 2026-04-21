@@ -22,3 +22,8 @@ Lesson: System `/usr/bin/fc` (shell built-in) shadows npm-installed fc binary; u
 Task: Fix CI PATH shadowing — Ubuntu /usr/bin/fc (fontconfig) shadows npm-installed fc binary
 Iters: 2
 Lesson: Use `npm prefix -g` (not `npm root -g`) to locate the npm bin dir — prefix gives /usr/local directly; root gives node_modules and the ../bin dance fails when realpath exits 1 under set -e before any diagnostics print. test_fc.sh already had FC_BIN=${FC_BIN:-...} fallback; only ci.yml needed fixing. No version bump required for CI-only changes.
+
+## 2026-04-21 | codex-do | success
+Task: Ship fireclaude v0.5.0 — rename npm binary from fc to fireclaude, add alias subcommand
+Iters: 1 (inline; all changes applied directly without codex MCP)
+Lesson: npm warns "script name was invalid and removed" when bin path has ./ prefix — it actually normalizes and publishes correctly; verify with `npm info <pkg> bin`. When a feat + refactor both touch the same single file, there is no clean way to split them across commits — stage the file once and use the larger commit message. The fc bash script is the single source of truth for both binary rename and alias feature.
