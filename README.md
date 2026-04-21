@@ -1,4 +1,4 @@
-# firecrawl-claude-skill
+# Fireclaude
 
 Self-hosted [Firecrawl](https://github.com/firecrawl/firecrawl) packaged as a Claude Code skill. Scrape, crawl, search, batch-dataset, JSON-schema extract, change tracking, webhook testing — all local, no API keys, no paid tiers.
 
@@ -8,11 +8,11 @@ Stack: Firecrawl API + Playwright (stealth) + SearxNG (search) + Ollama (llama3.
 
 ```bash
 # one-liner (pinned release)
-curl -sSL https://raw.githubusercontent.com/sannidhyas/firecrawl-claude-skill/v0.2.0/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/sannidhyas/fireclaude/v0.3.0/install.sh | bash
 
 # or clone first
-git clone https://github.com/sannidhyas/firecrawl-claude-skill
-cd firecrawl-claude-skill && ./install.sh
+git clone https://github.com/sannidhyas/fireclaude
+cd fireclaude && ./install.sh
 ```
 
 Install takes 5–15 min on first run (Docker build + model download). The running stack uses ~4 GB RAM and ~8 GB disk.
@@ -25,20 +25,20 @@ FIRECRAWL_INSTALL_DIR=/opt/firecrawl ./install.sh
 ## Marketplace install
 
 ```
-/plugin marketplace add sannidhyas/firecrawl-claude-skill
+/plugin marketplace add sannidhyas/fireclaude
 ```
 
 ## npm install
 
 ```bash
-npm install -g firecrawl-claude-skill
+npm install -g fireclaude
 # then run: install.sh   (bootstraps the Docker stack)
 ```
 
 ## Claude Code local plugin install
 
 ```
-/plugin add ./firecrawl-claude-skill
+/plugin add ./fireclaude
 ```
 
 The skill activates automatically when you ask Claude to scrape, crawl, search the web, or extract structured data from pages.
@@ -155,7 +155,7 @@ fc changes https://example.com --json
 # → {"url":"...","changed":false,"previous_hash":"abc...","current_hash":"abc...","diff_bytes":0,"scraped_at":1714521600}
 ```
 
-Change history stored in SQLite at `~/.firecrawl-claude-skill/changes.db` (override with `CHANGES_DB_PATH`).
+Change history stored in SQLite at `~/.fireclaude/changes.db` (override with `CHANGES_DB_PATH`).
 
 ## Webhook testing
 
@@ -216,7 +216,7 @@ Six `git diff` patches in `docker/patches/` are applied against firecrawl SHA `0
 ./uninstall.sh
 
 # to also delete install dir and all data:
-rm -rf ~/.firecrawl-claude-skill
+rm -rf ~/.fireclaude
 ```
 
 ## Contributing

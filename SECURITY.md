@@ -11,7 +11,7 @@
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Email: **shrutiatulit@gmail.com** with subject line `[firecrawl-claude-skill] Security Disclosure`.
+Email: **shrutiatulit@gmail.com** with subject line `[fireclaude] Security Disclosure`.
 
 Include:
 - Description of the vulnerability

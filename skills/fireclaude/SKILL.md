@@ -7,7 +7,7 @@ allowed-tools: ["Bash", "Read", "Write"]
 # Firecrawl (self-hosted — full local parity)
 
 Local Firecrawl API at `http://localhost:3002` (default; override with `FIRECRAWL_URL`).
-No auth. Stack managed via `docker compose` in `$FIRECRAWL_INSTALL_DIR` (default `$HOME/.firecrawl-claude-skill/firecrawl`).
+No auth. Stack managed via `docker compose` in `$FIRECRAWL_INSTALL_DIR` (default `$HOME/.fireclaude/firecrawl`).
 
 Stack (8 containers):
 
@@ -35,7 +35,7 @@ Stack (8 containers):
 
 ## Commands
 
-Wrapper script at `${CLAUDE_PLUGIN_ROOT}/skills/firecrawl/scripts/fc` (symlink or add to PATH after install).
+Wrapper script at `${CLAUDE_PLUGIN_ROOT}/skills/fireclaude/scripts/fc` (symlink or add to PATH after install).
 
 | Action | Command |
 |---|---|
@@ -51,7 +51,7 @@ Wrapper script at `${CLAUDE_PLUGIN_ROOT}/skills/firecrawl/scripts/fc` (symlink o
 ## Dataset pipeline
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/firecrawl/scripts/batch-dataset.py \
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/fireclaude/scripts/batch-dataset.py \
     --urls urls.txt --out dataset.jsonl --format markdown --only-main
 ```
 

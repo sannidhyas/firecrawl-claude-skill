@@ -2,7 +2,7 @@
 # uninstall.sh — stop and remove the self-hosted Firecrawl stack
 set -euo pipefail
 
-FIRECRAWL_INSTALL_DIR="${FIRECRAWL_INSTALL_DIR:-$HOME/.firecrawl-claude-skill/firecrawl}"
+FIRECRAWL_INSTALL_DIR="${FIRECRAWL_INSTALL_DIR:-$HOME/.fireclaude/firecrawl}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-firecrawl}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'

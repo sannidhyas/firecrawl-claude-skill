@@ -42,7 +42,7 @@ jobs:
           FIRECRAWL_URL: http://localhost:3099
           COMPOSE_PROJECT_NAME: firecrawl_ci
         run: |
-          bash skills/firecrawl/tests/test_fc.sh
+          bash skills/fireclaude/tests/test_fc.sh
         timeout-minutes: 5
 
       - name: Tear down stack

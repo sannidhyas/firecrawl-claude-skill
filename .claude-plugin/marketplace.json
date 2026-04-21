@@ -1,9 +1,9 @@
 {
-  "name": "firecrawl-claude-skill",
-  "version": "0.2.0",
-  "description": "Self-hosted Firecrawl for Claude Code — scrape, crawl, search, batch, JSON-schema extract, change tracking, webhook testing, model swap. No API keys, no paid tiers.",
-  "homepage": "https://github.com/sannidhyas/firecrawl-claude-skill",
-  "repository": "github:sannidhyas/firecrawl-claude-skill",
+  "name": "fireclaude",
+  "version": "0.3.0",
+  "description": "Self-hosted Firecrawl for Claude Code — scrape, crawl, batch, JSON-schema extract, change tracking, webhook testing, model swap. No API keys, no paid tiers.",
+  "homepage": "https://github.com/sannidhyas/fireclaude",
+  "repository": "github:sannidhyas/fireclaude",
   "author": {
     "name": "sannidhyas",
     "url": "https://github.com/sannidhyas"
@@ -22,13 +22,13 @@
   ],
   "skills": [
     {
-      "name": "firecrawl",
-      "path": "skills/firecrawl",
+      "name": "fireclaude",
+      "path": "skills/fireclaude",
       "description": "Scrape, crawl, search, extract, and track changes via self-hosted Firecrawl",
       "commands": [
         {
           "name": "fc",
-          "path": "skills/firecrawl/scripts/fc",
+          "path": "skills/fireclaude/scripts/fc",
           "description": "Main Firecrawl CLI wrapper"
         }
       ]

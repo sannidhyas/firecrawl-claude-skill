@@ -1,5 +1,5 @@
 # Never commit the install dir or upstream clone
-.firecrawl-claude-skill/
+.fireclaude/
 /firecrawl/
 
 # Logs

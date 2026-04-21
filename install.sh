@@ -3,7 +3,7 @@
 set -euo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FIRECRAWL_INSTALL_DIR="${FIRECRAWL_INSTALL_DIR:-$HOME/.firecrawl-claude-skill/firecrawl}"
+FIRECRAWL_INSTALL_DIR="${FIRECRAWL_INSTALL_DIR:-$HOME/.fireclaude/firecrawl}"
 FIRECRAWL_UPSTREAM="https://github.com/firecrawl/firecrawl.git"
 FIRECRAWL_PINNED_SHA="0ae6387b762c7450190eb7d8f9f7b81b7adfcaab"
 PORT="${PORT:-3002}"
@@ -35,7 +35,7 @@ docker compose version >/dev/null 2>&1 || \
 info "All dependencies present."
 
 # ── Step 1b: create data dir for change tracking ─────────────────────────────
-CHANGES_DB_DIR="${CHANGES_DB_PATH:-$HOME/.firecrawl-claude-skill/changes.db}"
+CHANGES_DB_DIR="${CHANGES_DB_PATH:-$HOME/.fireclaude/changes.db}"
 CHANGES_DB_DIR="$(dirname "$CHANGES_DB_DIR")"
 mkdir -p "$CHANGES_DB_DIR"
 info "Change-tracking DB dir: $CHANGES_DB_DIR"
@@ -223,6 +223,6 @@ echo "Project:   $COMPOSE_PROJECT_NAME"
 echo ""
 echo "Next steps:"
 echo "  Add skill to Claude Code: /plugin add $PLUGIN_ROOT"
-echo "  Skill scripts: $PLUGIN_ROOT/skills/firecrawl/scripts/fc"
-echo "  Quick test: PATH=\"$PLUGIN_ROOT/skills/firecrawl/scripts:\$PATH\" fc scrape https://example.com"
+echo "  Skill scripts: $PLUGIN_ROOT/skills/fireclaude/scripts/fc"
+echo "  Quick test: PATH=\"$PLUGIN_ROOT/skills/fireclaude/scripts:\$PATH\" fc scrape https://example.com"
 echo "========================================"

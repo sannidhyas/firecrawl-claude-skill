@@ -13,7 +13,7 @@
 
 ## Checklist
 
-- [ ] `bash skills/firecrawl/tests/test_fc.sh` passes locally (all 9 tests green)
+- [ ] `bash skills/fireclaude/tests/test_fc.sh` passes locally (all 9 tests green)
 - [ ] New subcommands have `--json` flag
 - [ ] Backward compatible (existing `fc` invocations unchanged)
 - [ ] `CHANGELOG.md` updated

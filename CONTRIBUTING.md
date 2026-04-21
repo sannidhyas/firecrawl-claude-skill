@@ -3,8 +3,8 @@
 ## Development setup
 
 ```bash
-git clone https://github.com/sannidhyas/firecrawl-claude-skill
-cd firecrawl-claude-skill
+git clone https://github.com/sannidhyas/fireclaude
+cd fireclaude
 
 # Bootstrap stack (first time ~10–15 min)
 FIRECRAWL_INSTALL_DIR=$HOME/.firecrawl-dev PORT=3002 ./install.sh
@@ -14,17 +14,17 @@ FIRECRAWL_INSTALL_DIR=$HOME/.firecrawl-dev PORT=3002 ./install.sh
 
 ```bash
 # Requires a live stack at FIRECRAWL_URL
-FIRECRAWL_URL=http://localhost:3002 bash skills/firecrawl/tests/test_fc.sh
+FIRECRAWL_URL=http://localhost:3002 bash skills/fireclaude/tests/test_fc.sh
 ```
 
 All 9 tests must pass before opening a PR.
 
 ## Adding a new `fc` subcommand
 
-1. Add `cmd_<name>()` function in `skills/firecrawl/scripts/fc`.
+1. Add `cmd_<name>()` function in `skills/fireclaude/scripts/fc`.
 2. Wire it into the `main()` case statement.
 3. Add a `--json` flag that returns the raw API response.
-4. Add a test case in `skills/firecrawl/tests/test_fc.sh`.
+4. Add a test case in `skills/fireclaude/tests/test_fc.sh`.
 5. Document in `README.md` and `CHANGELOG.md`.
 
 ## Patches
@@ -38,7 +38,7 @@ To update or add a patch:
 cd $FIRECRAWL_INSTALL_DIR
 # ... edit files ...
 git diff HEAD -- apps/playwright-service-ts/src/playwright.ts \
-  > /path/to/firecrawl-claude-skill/docker/patches/my-patch.ts.patch
+  > /path/to/fireclaude/docker/patches/my-patch.ts.patch
 ```
 
 Keep patches minimal. Comment each hunk to explain why the change is needed.
