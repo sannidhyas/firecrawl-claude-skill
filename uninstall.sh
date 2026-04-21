@@ -27,6 +27,12 @@ read -r -p "Remove clone directory $FIRECRAWL_INSTALL_DIR? [y/N] " _remove_clone
 _remove_clone="${_remove_clone:-N}"
 if [[ "$_remove_clone" =~ ^[Yy]$ ]]; then
   info "Removing $FIRECRAWL_INSTALL_DIR ..."
+  # Ollama and searxng bind-mount dirs contain root-owned files written by
+  # containers. Use a temporary alpine container to remove them cleanly.
+  if [[ -d "$FIRECRAWL_INSTALL_DIR/self-host-extras" ]]; then
+    docker run --rm -v "$FIRECRAWL_INSTALL_DIR/self-host-extras:/target" \
+      alpine sh -c "rm -rf /target" 2>/dev/null || true
+  fi
   rm -rf "$FIRECRAWL_INSTALL_DIR"
   info "Clone directory removed."
 else
@@ -36,7 +42,7 @@ fi
 # ── Step 3: prompt to remove ollama-data volume (default No) ─────────────────
 echo ""
 _ollama_vol="${COMPOSE_PROJECT_NAME}_ollama-data"
-if docker volume ls -q | grep -q "^${_ollama_vol}$" 2>/dev/null; then
+if docker volume ls -q 2>/dev/null | grep -q "^${_ollama_vol}$"; then
   read -r -p "Remove ollama model cache volume '${_ollama_vol}'? [y/N] " _remove_ollama
   _remove_ollama="${_remove_ollama:-N}"
   if [[ "$_remove_ollama" =~ ^[Yy]$ ]]; then
