@@ -3,13 +3,113 @@
 set -euo pipefail
 
 FC_URL="${FIRECRAWL_URL:-http://localhost:3002}"
-FC_REPO="${FIRECRAWL_REPO:-${FIRECRAWL_INSTALL_DIR:-$HOME/.fireclaude/firecrawl}}"
+
+# ── Install dir resolution ────────────────────────────────────────────────────
+# 1. FIRECRAWL_INSTALL_DIR (legacy, keeps backward compat)
+# 2. FIRECLAUDE_INSTALL_DIR (new alias)
+# 3. $HOME/.fireclaude/firecrawl (standard install dir)
+_resolve_install_dir() {
+  if [[ -n "${FIRECRAWL_INSTALL_DIR:-}" ]]; then
+    echo "$FIRECRAWL_INSTALL_DIR"
+  elif [[ -n "${FIRECLAUDE_INSTALL_DIR:-}" ]]; then
+    echo "$FIRECLAUDE_INSTALL_DIR"
+  elif [[ -d "$HOME/.fireclaude/firecrawl" ]]; then
+    echo "$HOME/.fireclaude/firecrawl"
+  else
+    die "install dir not found. Run 'fc setup' first, or set FIRECRAWL_INSTALL_DIR."
+  fi
+}
+
 FC_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHANGES_DB_PATH="${CHANGES_DB_PATH:-$HOME/.fireclaude/changes.db}"
 
 # Container name derives from COMPOSE_PROJECT_NAME (default: firecrawl)
 _COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-firecrawl}"
 OLLAMA_CONTAINER="${_COMPOSE_PROJECT}-ollama-1"
+
+# ── Plugin version (read from package.json next to repo root) ─────────────────
+_plugin_version() {
+  local pkg
+  # Walk up from script dir looking for package.json with a "version" field
+  local d="$FC_SCRIPT_DIR"
+  for _ in 1 2 3 4 5; do
+    d="$(dirname "$d")"
+    pkg="$d/package.json"
+    if [[ -f "$pkg" ]]; then
+      local v
+      v=$(node -e "try{process.stdout.write(require('$pkg').version||'')}catch(e){}" 2>/dev/null || true)
+      [[ -n "$v" ]] && echo "$v" && return
+    fi
+  done
+  # fallback: try npm root -g
+  local npm_pkg
+  npm_pkg="$(npm root -g 2>/dev/null)/fireclaude/package.json" || true
+  if [[ -f "$npm_pkg" ]]; then
+    node -e "try{process.stdout.write(require('$npm_pkg').version||'')}catch(e){}" 2>/dev/null || true
+    return
+  fi
+  echo "unknown"
+}
+
+# ── install.sh resolution ─────────────────────────────────────────────────────
+_resolve_install_sh() {
+  # 1. Explicit env var
+  if [[ -n "${FIRECLAUDE_INSTALL_SH:-}" && -f "$FIRECLAUDE_INSTALL_SH" ]]; then
+    echo "$FIRECLAUDE_INSTALL_SH"; return
+  fi
+  # 2. npm global root
+  local npm_root
+  npm_root="$(npm root -g 2>/dev/null)" || true
+  if [[ -n "$npm_root" && -f "$npm_root/fireclaude/install.sh" ]]; then
+    echo "$npm_root/fireclaude/install.sh"; return
+  fi
+  # 3. Repo root (git checkout)
+  local repo_root
+  repo_root="$(git -C "$FC_SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)" || true
+  if [[ -n "$repo_root" && -f "$repo_root/install.sh" ]]; then
+    echo "$repo_root/install.sh"; return
+  fi
+  # 4. Walk up from script dir
+  local d="$FC_SCRIPT_DIR"
+  for _ in 1 2 3 4 5; do
+    d="$(dirname "$d")"
+    if [[ -f "$d/install.sh" ]]; then
+      echo "$d/install.sh"; return
+    fi
+  done
+  # 5. Download fallback
+  local ver
+  ver="$(_plugin_version)"
+  echo "https://raw.githubusercontent.com/sannidhyas/fireclaude/v${ver}/install.sh"
+}
+
+_resolve_uninstall_sh() {
+  if [[ -n "${FIRECLAUDE_INSTALL_SH:-}" ]]; then
+    local base
+    base="$(dirname "$FIRECLAUDE_INSTALL_SH")"
+    [[ -f "$base/uninstall.sh" ]] && echo "$base/uninstall.sh" && return
+  fi
+  local npm_root
+  npm_root="$(npm root -g 2>/dev/null)" || true
+  if [[ -n "$npm_root" && -f "$npm_root/fireclaude/uninstall.sh" ]]; then
+    echo "$npm_root/fireclaude/uninstall.sh"; return
+  fi
+  local repo_root
+  repo_root="$(git -C "$FC_SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)" || true
+  if [[ -n "$repo_root" && -f "$repo_root/uninstall.sh" ]]; then
+    echo "$repo_root/uninstall.sh"; return
+  fi
+  local d="$FC_SCRIPT_DIR"
+  for _ in 1 2 3 4 5; do
+    d="$(dirname "$d")"
+    if [[ -f "$d/uninstall.sh" ]]; then
+      echo "$d/uninstall.sh"; return
+    fi
+  done
+  local ver
+  ver="$(_plugin_version)"
+  echo "https://raw.githubusercontent.com/sannidhyas/fireclaude/v${ver}/uninstall.sh"
+}
 
 die() { echo "fc: $*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing dep: $1"; }
@@ -18,8 +118,19 @@ need jq
 
 usage() {
   cat <<EOF
-fc - Firecrawl self-host wrapper
+fc - Firecrawl self-host wrapper  (fireclaude v$(_plugin_version 2>/dev/null || echo '?'))
 
+Lifecycle:
+  fc setup [--install-dir PATH] [--model NAME]   bootstrap stack (runs install.sh)
+  fc start                                        start stopped containers
+  fc stop                                         stop running containers
+  fc status [--json]                              container status
+  fc teardown [--purge]                           stop + remove stack (--purge skips prompts)
+  fc upgrade [--sha GIT_SHA]                      pull latest fireclaude, rebuild, restart
+  fc version                                      fireclaude version + firecrawl SHA + models
+  fc doctor [--json]                              dep check + container health + model presence
+
+Data commands:
   fc scrape <url> [--format markdown|html|links|screenshot] [--raw] [--json]
   fc batch <urls.txt> [--out dataset.jsonl] [--format markdown] [--json]
   fc search "<query>" [--limit N] [--json]
@@ -33,11 +144,14 @@ fc - Firecrawl self-host wrapper
   fc changes <url> [--diff] [--json]
   fc webhook-listen [--port N] [--json]
   fc health
-  fc status
   fc logs [api|playwright-service|redis|rabbitmq|searxng|ollama]
 
-ENV: FIRECRAWL_URL (default $FC_URL), FIRECRAWL_REPO / FIRECRAWL_INSTALL_DIR (default $FC_REPO)
+Agent-safe JSON endpoints: fc doctor --json  |  fc status --json  |  fc scrape --json
+
+ENV: FIRECRAWL_URL (default $FC_URL)
+     FIRECRAWL_INSTALL_DIR / FIRECLAUDE_INSTALL_DIR (install dir, default ~/.fireclaude/firecrawl)
      CHANGES_DB_PATH (default \$HOME/.fireclaude/changes.db)
+     FIRECLAUDE_INSTALL_SH (override install.sh path)
 EOF
 }
 
@@ -46,6 +160,262 @@ post() {
   curl -sS -X POST "$FC_URL$path" -H 'Content-Type: application/json' -d "$body"
 }
 get() { curl -sS "$FC_URL$1"; }
+
+# ── Lifecycle commands ────────────────────────────────────────────────────────
+
+cmd_setup() {
+  local install_dir="" model_name=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --install-dir) install_dir="$2"; shift 2 ;;
+      --model)       model_name="$2"; shift 2 ;;
+      *) die "setup: unknown arg: $1" ;;
+    esac
+  done
+
+  local install_sh
+  install_sh="$(_resolve_install_sh)"
+
+  local env_extra=()
+  [[ -n "$install_dir" ]] && env_extra+=("FIRECRAWL_INSTALL_DIR=$install_dir")
+  [[ -n "$model_name" ]]  && env_extra+=("MODEL_NAME=$model_name")
+
+  if [[ "$install_sh" == http* ]]; then
+    echo "fc: downloading install.sh from $install_sh ..." >&2
+    local tmp_sh
+    tmp_sh="$(mktemp /tmp/fireclaude-install-XXXXXX.sh)"
+    curl -sSL "$install_sh" -o "$tmp_sh" || die "could not download install.sh from $install_sh"
+    chmod +x "$tmp_sh"
+    env "${env_extra[@]}" bash "$tmp_sh"
+    rm -f "$tmp_sh"
+  else
+    chmod +x "$install_sh"
+    env "${env_extra[@]}" bash "$install_sh"
+  fi
+}
+
+cmd_start() {
+  local fc_repo
+  fc_repo="$(_resolve_install_dir)"
+  (cd "$fc_repo" && \
+    COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+    docker compose --project-name "${_COMPOSE_PROJECT}" up -d)
+}
+
+cmd_stop() {
+  local fc_repo
+  fc_repo="$(_resolve_install_dir)"
+  (cd "$fc_repo" && \
+    COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+    docker compose --project-name "${_COMPOSE_PROJECT}" stop)
+}
+
+cmd_status() {
+  local json_out=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json) json_out=1; shift ;;
+      *) die "status: unknown arg: $1" ;;
+    esac
+  done
+  local fc_repo
+  fc_repo="$(_resolve_install_dir)"
+
+  if [[ "$json_out" -eq 1 ]]; then
+    # Emit array of {service, state} objects
+    local raw
+    raw=$(cd "$fc_repo" && \
+      COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+      docker compose --project-name "${_COMPOSE_PROJECT}" ps --format json 2>/dev/null) || raw="[]"
+    # docker compose ps --format json outputs one JSON object per line (not an array)
+    echo "$raw" | jq -s '[.[] | {service: (.Service // .Name // "unknown"), state: (.State // .Status // "unknown")}]'
+  else
+    (cd "$fc_repo" && \
+      COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+      docker compose --project-name "${_COMPOSE_PROJECT}" ps)
+  fi
+}
+
+cmd_teardown() {
+  local purge=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --purge) purge=1; shift ;;
+      *) die "teardown: unknown arg: $1" ;;
+    esac
+  done
+
+  local uninstall_sh
+  uninstall_sh="$(_resolve_uninstall_sh)"
+
+  if [[ "$uninstall_sh" == http* ]]; then
+    echo "fc: downloading uninstall.sh from $uninstall_sh ..." >&2
+    local tmp_sh
+    tmp_sh="$(mktemp /tmp/fireclaude-uninstall-XXXXXX.sh)"
+    curl -sSL "$uninstall_sh" -o "$tmp_sh" || die "could not download uninstall.sh"
+    chmod +x "$tmp_sh"
+    if [[ "$purge" -eq 1 ]]; then
+      # Auto-answer yes to both prompts via stdin
+      printf 'y\ny\n' | bash "$tmp_sh"
+    else
+      bash "$tmp_sh"
+    fi
+    rm -f "$tmp_sh"
+  else
+    chmod +x "$uninstall_sh"
+    if [[ "$purge" -eq 1 ]]; then
+      printf 'y\ny\n' | bash "$uninstall_sh"
+    else
+      bash "$uninstall_sh"
+    fi
+  fi
+}
+
+cmd_upgrade() {
+  local sha=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --sha) sha="$2"; shift 2 ;;
+      *) die "upgrade: unknown arg: $1" ;;
+    esac
+  done
+
+  local fc_repo
+  fc_repo="$(_resolve_install_dir)"
+
+  # 1. Try to upgrade the npm package itself (only if installed via npm globally)
+  local npm_root
+  npm_root="$(npm root -g 2>/dev/null)" || true
+  if [[ -n "$npm_root" && -d "$npm_root/fireclaude" ]]; then
+    echo "fc: upgrading fireclaude npm package..." >&2
+    npm install -g fireclaude 2>&1 || echo "fc: npm upgrade failed, continuing with existing version" >&2
+  fi
+
+  # 2. If --sha given, checkout new firecrawl SHA, re-apply patches, rebuild
+  if [[ -n "$sha" ]]; then
+    echo "fc: pinning firecrawl to SHA $sha ..." >&2
+    git -C "$fc_repo" fetch --quiet origin
+    git -C "$fc_repo" checkout --quiet "$sha" || die "could not checkout SHA $sha"
+
+    # Re-apply patches from install.sh location
+    local install_sh
+    install_sh="$(_resolve_install_sh)"
+    if [[ "$install_sh" != http* ]]; then
+      local plugin_root
+      plugin_root="$(dirname "$install_sh")"
+      echo "fc: re-applying patches from $plugin_root/docker/patches/ ..." >&2
+      for patch in "$plugin_root/docker/patches/"*.patch; do
+        [[ -f "$patch" ]] || continue
+        pname="$(basename "$patch")"
+        if git -C "$fc_repo" apply --check "$patch" >/dev/null 2>&1; then
+          git -C "$fc_repo" apply --3way "$patch" 2>&1 || echo "fc: patch $pname failed (skipping)" >&2
+        elif git -C "$fc_repo" apply --check --reverse "$patch" >/dev/null 2>&1; then
+          echo "fc: $pname already applied" >&2
+        else
+          echo "fc: $pname cannot be applied (skipping)" >&2
+        fi
+      done
+    fi
+
+    # Rebuild api + playwright-service
+    echo "fc: rebuilding api + playwright-service ..." >&2
+    (cd "$fc_repo" && \
+      COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+      docker compose --project-name "${_COMPOSE_PROJECT}" build api playwright-service)
+  fi
+
+  # 3. Restart stack
+  echo "fc: restarting stack ..." >&2
+  (cd "$fc_repo" && \
+    COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+    docker compose --project-name "${_COMPOSE_PROJECT}" up -d)
+
+  echo "fc: upgrade complete." >&2
+}
+
+cmd_version() {
+  local ver
+  ver="$(_plugin_version)"
+  echo "fireclaude: $ver"
+
+  local fc_repo=""
+  fc_repo="$(_resolve_install_dir 2>/dev/null)" || true
+  if [[ -n "$fc_repo" && -d "$fc_repo/.git" ]]; then
+    local sha
+    sha=$(git -C "$fc_repo" rev-parse HEAD 2>/dev/null || echo "unknown")
+    echo "firecrawl SHA: $sha"
+  else
+    echo "firecrawl SHA: (stack not installed)"
+  fi
+
+  echo "ollama models:"
+  docker exec "$OLLAMA_CONTAINER" ollama list 2>/dev/null | tail -n +2 | awk '{print "  " $1}' || \
+    echo "  (ollama container not running)"
+}
+
+cmd_doctor() {
+  local json_out=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json) json_out=1; shift ;;
+      *) die "doctor: unknown arg: $1" ;;
+    esac
+  done
+
+  # ── dep checks ───────────────────────────────────────────────────────────────
+  local deps_json="{"
+  local first=1
+  for dep in docker git curl jq python3 node; do
+    local ok
+    command -v "$dep" >/dev/null 2>&1 && ok="true" || ok="false"
+    [[ "$first" -eq 0 ]] && deps_json+=","
+    deps_json+="\"$dep\":$ok"
+    first=0
+  done
+  # docker compose plugin
+  local compose_ok
+  docker compose version >/dev/null 2>&1 && compose_ok="true" || compose_ok="false"
+  deps_json+=",\"docker-compose\":$compose_ok"
+  deps_json+="}"
+
+  # ── container health ─────────────────────────────────────────────────────────
+  local containers_json="[]"
+  local fc_repo=""
+  fc_repo="$(_resolve_install_dir 2>/dev/null)" || true
+  if [[ -n "$fc_repo" ]]; then
+    local raw
+    raw=$(cd "$fc_repo" && \
+      COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+      docker compose --project-name "${_COMPOSE_PROJECT}" ps --format json 2>/dev/null) || raw=""
+    if [[ -n "$raw" ]]; then
+      containers_json=$(echo "$raw" | jq -s '[.[] | {service: (.Service // .Name // "unknown"), state: (.State // .Status // "unknown")}]')
+    fi
+  fi
+
+  # ── model presence ───────────────────────────────────────────────────────────
+  local models_json="[]"
+  models_json=$(docker exec "$OLLAMA_CONTAINER" ollama list 2>/dev/null \
+    | tail -n +2 | awk '{print $1}' | jq -Rn '[inputs]') || models_json="[]"
+
+  if [[ "$json_out" -eq 1 ]]; then
+    jq -n \
+      --argjson deps "$deps_json" \
+      --argjson containers "$containers_json" \
+      --argjson models "$models_json" \
+      '{deps: $deps, containers: $containers, models: $models}'
+  else
+    echo "=== Dependencies ==="
+    echo "$deps_json" | jq -r 'to_entries[] | "\(.key): \(.value)"'
+    echo ""
+    echo "=== Containers ==="
+    echo "$containers_json" | jq -r '.[] | "\(.service): \(.state)"'
+    echo ""
+    echo "=== Ollama Models ==="
+    echo "$models_json" | jq -r '.[]'
+  fi
+}
+
+# ── Stack commands ────────────────────────────────────────────────────────────
 
 cmd_health() {
   local r
@@ -58,14 +428,16 @@ cmd_health() {
   fi
 }
 
-cmd_status() {
-  (cd "$FC_REPO" && docker compose ps)
-}
-
 cmd_logs() {
   local svc="${1:-api}"
-  (cd "$FC_REPO" && docker compose logs --tail=200 "$svc")
+  local fc_repo
+  fc_repo="$(_resolve_install_dir)"
+  (cd "$fc_repo" && \
+    COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+    docker compose --project-name "${_COMPOSE_PROJECT}" logs --tail=200 "$svc")
 }
+
+# ── Data commands ─────────────────────────────────────────────────────────────
 
 cmd_scrape() {
   [[ $# -ge 1 ]] || die "scrape needs <url>"
@@ -225,17 +597,16 @@ cmd_model() {
     swap)
       [[ $# -ge 1 ]] || die "model swap needs <name>"
       local name="$1"
-      local env_file="$FC_REPO/.env"
+      local fc_repo; fc_repo="$(_resolve_install_dir)"
+      local env_file="$fc_repo/.env"
       [[ -f "$env_file" ]] || die "no .env at $env_file"
-      # Pull first
       echo "Pulling $name into ollama container..." >&2
       docker exec "$OLLAMA_CONTAINER" ollama pull "$name"
-      # Update MODEL_NAME in .env
       sed -i "s/^MODEL_NAME=.*/MODEL_NAME=$name/" "$env_file"
       echo "Updated MODEL_NAME=$name in $env_file" >&2
-      # Recreate api container to pick up new env
-      (cd "$FC_REPO" && docker compose up -d --force-recreate api)
-      # Wait for API health
+      (cd "$fc_repo" && \
+        COMPOSE_PROJECT_NAME="${_COMPOSE_PROJECT}" \
+        docker compose --project-name "${_COMPOSE_PROJECT}" up -d --force-recreate api)
       local url="http://localhost:${PORT:-3002}"
       echo "Waiting for API health after swap..." >&2
       local deadline=$((SECONDS + 60))
@@ -253,7 +624,8 @@ cmd_model() {
       echo "$name"
       ;;
     current)
-      local env_file="$FC_REPO/.env"
+      local fc_repo; fc_repo="$(_resolve_install_dir 2>/dev/null)" || true
+      local env_file="${fc_repo:-}/.env"
       if [[ -f "$env_file" ]]; then
         grep '^MODEL_NAME=' "$env_file" | cut -d= -f2-
       else
@@ -298,8 +670,6 @@ cmd_webhook_listen() {
   need python3
   local extra_args=()
   [[ "$json_out" -eq 1 ]] && extra_args+=("--json")
-  # exec replaces the bash wrapper so $! is the real python PID;
-  # -u forces unbuffered stdout so JSON lines appear immediately.
   exec python3 -u "$FC_SCRIPT_DIR/fc-webhook-listen.py" --port "$port" "${extra_args[@]}"
 }
 
@@ -307,6 +677,13 @@ main() {
   local cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 1; }
   shift
   case "$cmd" in
+    setup)          cmd_setup "$@" ;;
+    start)          cmd_start "$@" ;;
+    stop)           cmd_stop "$@" ;;
+    teardown)       cmd_teardown "$@" ;;
+    upgrade)        cmd_upgrade "$@" ;;
+    version)        cmd_version "$@" ;;
+    doctor)         cmd_doctor "$@" ;;
     health)         cmd_health "$@" ;;
     status)         cmd_status "$@" ;;
     logs)           cmd_logs "$@" ;;

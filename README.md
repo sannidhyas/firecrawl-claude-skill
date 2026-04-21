@@ -4,71 +4,79 @@ Self-hosted [Firecrawl](https://github.com/firecrawl/firecrawl) packaged as a Cl
 
 Stack: Firecrawl API + Playwright (stealth) + SearxNG (search) + Ollama (llama3.2:3b, JSON extract).
 
-## TL;DR install
+## Install
 
 ```bash
-# one-liner (pinned release)
-curl -sSL https://raw.githubusercontent.com/sannidhyas/fireclaude/v0.3.0/install.sh | bash
-
-# or clone first
-git clone https://github.com/sannidhyas/fireclaude
-cd fireclaude && ./install.sh
+npm install -g fireclaude
+fc setup
 ```
 
-Install takes 5–15 min on first run (Docker build + model download). The running stack uses ~4 GB RAM and ~8 GB disk.
+`fc setup` clones firecrawl, applies patches, builds Docker images, pulls the Ollama model, and runs smoke tests. Takes 5–15 min on first run. The running stack uses ~4 GB RAM and ~8 GB disk.
 
-Override install location:
+Override install location or model:
 ```bash
-FIRECRAWL_INSTALL_DIR=/opt/firecrawl ./install.sh
+fc setup --install-dir /opt/firecrawl --model qwen2.5:7b
 ```
 
-## Marketplace install
+## Claude Code plugin install
 
 ```
 /plugin marketplace add sannidhyas/fireclaude
 ```
 
-## npm install
-
-```bash
-npm install -g fireclaude
-# then run: install.sh   (bootstraps the Docker stack)
-```
-
-## Claude Code local plugin install
-
+Or from a local checkout:
 ```
 /plugin add ./fireclaude
 ```
 
-The skill activates automatically when you ask Claude to scrape, crawl, search the web, or extract structured data from pages.
+The skill activates automatically when you ask Claude to scrape, crawl, search the web, or extract structured data.
 
-## What works
+## CLI reference
 
-| Feature | Command |
+### Lifecycle
+
+| Command | Description |
 |---|---|
-| Scrape single URL → markdown/html/links | `fc scrape <url>` |
-| Batch scrape URL list → JSONL dataset | `fc batch urls.txt --out dataset.jsonl` |
-| Web search via SearxNG | `fc search "query" --limit 10` |
-| Map all URLs on a site | `fc map https://docs.example.com` |
-| Crawl site → markdown files | `fc crawl https://docs.example.com --limit 50 --out ./docs` |
-| JSON-schema extract via Ollama | `fc extract <url> --schema schema.json` |
-| Change tracking | `fc changes <url> [--diff]` |
-| Webhook receiver | `fc webhook-listen [--port N]` |
-| Manage Ollama models | `fc model list/pull/swap/current` |
-| Stack health check | `fc health` |
-| Stack status | `fc status` |
-| Tail logs | `fc logs [api\|playwright-service\|ollama\|searxng]` |
+| `fc setup [--install-dir PATH] [--model NAME]` | First-run bootstrap — clone, patch, build, start stack |
+| `fc start` | Start stopped containers |
+| `fc stop` | Stop running containers |
+| `fc status [--json]` | Container status. `--json` → array of `{service, state}` |
+| `fc teardown [--purge]` | Stop + remove stack. `--purge` auto-answers yes to all prompts |
+| `fc upgrade [--sha GIT_SHA]` | Pull latest fireclaude npm, optionally pin firecrawl to SHA, rebuild, restart |
+| `fc version` | fireclaude version + installed firecrawl SHA + ollama models |
+| `fc doctor [--json]` | Dep check + container health + model presence. `--json` for agent use |
+
+### Data
+
+| Command | Description |
+|---|---|
+| `fc scrape <url> [--format markdown\|html\|links\|screenshot] [--raw] [--json]` | Scrape single URL |
+| `fc batch <urls.txt> [--out dataset.jsonl] [--format markdown] [--json]` | Batch scrape URL list → JSONL |
+| `fc search "<query>" [--limit N] [--json]` | Web search via SearxNG |
+| `fc map <url> [--json]` | Map all URLs on a site |
+| `fc crawl <url> [--limit N] [--out dir] [--json]` | Crawl site → markdown files |
+| `fc extract <url> --schema <file.json> [--prompt STR] [--json]` | JSON-schema extract via Ollama |
+| `fc changes <url> [--diff] [--json]` | Change tracking against SQLite baseline |
+| `fc webhook-listen [--port N] [--json]` | Ephemeral HTTP receiver, logs POSTs as JSON lines |
+| `fc model list\|pull\|swap\|current` | Manage Ollama models |
+| `fc health` | API reachability check |
+| `fc logs [service]` | Tail container logs |
 
 ## Agentic use
 
-All subcommands accept `--json` to return the full API response as machine-readable JSON:
+Agent-safe JSON endpoints:
 
 ```bash
-# Scrape and pipe to jq
+# Dep + health check — returns {deps, containers, models}
+fc doctor --json | jq '.deps.docker'
+
+# Container status — returns [{service, state}, ...]
+fc status --json | jq 'length'
+
+# Scrape
 fc scrape https://example.com --json | jq '.data.markdown'
 
-# Search — get raw results
+# Search
 fc search "rust async runtime" --limit 5 --json | jq '.data[].url'
 
 # Map a site
@@ -80,12 +88,12 @@ fc extract https://news.ycombinator.com \
   --prompt "Extract the top 3 story titles and URLs" \
   --json | jq '.data.json'
 
-# Change tracking — agent-friendly
+# Change tracking
 fc changes https://example.com --json
-# → {"url":"...","changed":false,"current_hash":"...","diff_bytes":0,"scraped_at":1714521600}
+# → {"url":"...","changed":false,"current_hash":"...","diff_bytes":0,"scraped_at":...}
 ```
 
-### JSON-schema extract
+## JSON-schema extract
 
 ```bash
 cat > schema.json <<'EOF'
@@ -110,68 +118,31 @@ Routes through the `ollama` container (llama3.2:3b by default). First request co
 
 ## Model swap
 
-Swap the active Ollama model without restarting the whole stack:
-
 ```bash
-# List available models
 fc model list
-# → ["llama3.2:3b","nomic-embed-text:latest"]
-
-# Pull a new model
 fc model pull qwen2.5:7b
-
-# Swap active model (updates .env, recreates API container)
 fc model swap qwen2.5:7b
-
-# Check current model
 fc model current
-# → qwen2.5:7b
 ```
-
-Manual alternative — edit `$FIRECRAWL_INSTALL_DIR/.env`:
-```
-MODEL_NAME=qwen2.5:7b
-```
-Then: `docker exec firecrawl-ollama-1 ollama pull qwen2.5:7b && docker compose up -d --force-recreate api`
 
 ## Change tracking
 
-Track whether a page's content has changed since last check:
-
 ```bash
-# First run — always "changed" (no baseline)
-fc changes https://example.com
-# → https://example.com: changed
-
-# Second run — compare against stored hash
-fc changes https://example.com
-# → https://example.com: unchanged
-
-# Show diff
-fc changes https://example.com --diff
-
-# JSON output for agents
-fc changes https://example.com --json
-# → {"url":"...","changed":false,"previous_hash":"abc...","current_hash":"abc...","diff_bytes":0,"scraped_at":1714521600}
+fc changes https://example.com          # first run → changed
+fc changes https://example.com          # second run → unchanged
+fc changes https://example.com --diff   # show unified diff
+fc changes https://example.com --json   # agent-friendly output
 ```
 
 Change history stored in SQLite at `~/.fireclaude/changes.db` (override with `CHANGES_DB_PATH`).
 
 ## Webhook testing
 
-Spin up an ephemeral HTTP receiver to capture Firecrawl webhook callbacks:
-
 ```bash
-# Start listener (default port 4321)
 fc webhook-listen --json &
+# Each POST to :4321/webhook emits a JSON line:
+# {"timestamp":"...","method":"POST","path":"/webhook","headers":{...},"body":{...}}
 
-# Configure Firecrawl to POST webhooks to this receiver
-# SELF_HOSTED_WEBHOOK_URL=http://host.docker.internal:4321/webhook
-
-# Each POST emits a JSON line:
-# {"timestamp":"2026-04-21T10:00:00Z","method":"POST","path":"/webhook","headers":{...},"body":{...}}
-
-# Custom port
 fc webhook-listen --port 9999
 ```
 
@@ -184,21 +155,19 @@ TURNSTILE_SOLVER=capmonster       # or: 2captcha
 TURNSTILE_SOLVER_API_KEY=your_key
 ```
 
-Then apply the patch during install: the patch is at `docker/patches/playwright-turnstile.ts.patch` and is applied automatically by `install.sh`.
-
 ## Honest limits
 
 | Limit | Detail |
 |---|---|
-| Cloudflare 403 | No Fire-engine; CF IP reputation blocks ~50–60% of CF-protected pages. Retries help. Use `waitFor` + `actions` for JS-challenge pages. |
+| Cloudflare 403 | No Fire-engine; CF IP reputation blocks ~50–60% of CF-protected pages. |
 | No Fire-engine | Cloud-only antibot bypass not available self-hosted. |
 | IP rotation | Bring your own proxy via `PROXY_SERVER` env. |
-| LLM quality | llama3.2:3b extracts simple schemas well; complex multi-field extraction may need qwen2.5:7b or larger. |
+| LLM quality | llama3.2:3b extracts simple schemas well; complex extraction may need qwen2.5:7b. |
 | First model pull | ~2 GB download on first install. Subsequent starts are instant. |
 
 ## How patches work
 
-Six `git diff` patches in `docker/patches/` are applied against firecrawl SHA `0ae6387b762c7450190eb7d8f9f7b81b7adfcaab` at install time:
+Six `git diff` patches in `docker/patches/` are applied against firecrawl SHA `0ae6387b762c7450190eb7d8f9f7b81b7adfcaab`:
 
 | Patch | What it does |
 |---|---|
@@ -213,10 +182,8 @@ Six `git diff` patches in `docker/patches/` are applied against firecrawl SHA `0
 ## Uninstall
 
 ```bash
-./uninstall.sh
-
-# to also delete install dir and all data:
-rm -rf ~/.fireclaude
+fc teardown           # stop + prompt to remove clone + volumes
+fc teardown --purge   # stop + remove everything without prompts
 ```
 
 ## Contributing
@@ -230,3 +197,26 @@ See [SECURITY.md](SECURITY.md).
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+<details>
+<summary>Alternative install (no Node.js)</summary>
+
+If you don't have Node.js / npm:
+
+```bash
+# pinned release
+curl -sSL https://raw.githubusercontent.com/sannidhyas/fireclaude/v0.4.0/install.sh | bash
+
+# or clone first
+git clone https://github.com/sannidhyas/fireclaude
+cd fireclaude && ./install.sh
+```
+
+Override install location:
+```bash
+FIRECRAWL_INSTALL_DIR=/opt/firecrawl ./install.sh
+```
+
+</details>

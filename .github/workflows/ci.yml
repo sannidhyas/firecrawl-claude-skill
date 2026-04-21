@@ -22,10 +22,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends jq python3 curl
+
+      - name: Install fireclaude from local checkout
+        run: npm install -g ./
 
       - name: Bootstrap Firecrawl stack
         env:
@@ -34,12 +42,13 @@ jobs:
           INTERNAL_PORT: 3002
           COMPOSE_PROJECT_NAME: firecrawl_ci
         run: |
-          bash install.sh
+          fc setup --install-dir /tmp/fc-ci --model llama3.2:3b
         timeout-minutes: 20
 
       - name: Run skill tests
         env:
           FIRECRAWL_URL: http://localhost:3099
+          FIRECRAWL_INSTALL_DIR: /tmp/fc-ci
           COMPOSE_PROJECT_NAME: firecrawl_ci
         run: |
           bash skills/fireclaude/tests/test_fc.sh
@@ -51,4 +60,4 @@ jobs:
           FIRECRAWL_INSTALL_DIR: /tmp/fc-ci
           COMPOSE_PROJECT_NAME: firecrawl_ci
         run: |
-          bash uninstall.sh || true
+          fc teardown --purge || bash uninstall.sh || true

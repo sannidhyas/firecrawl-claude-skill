@@ -6,6 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), [Semantic Vers
 
 ---
 
+## [0.4.0] — 2026-04-21 — npm-only install flow
+
+### Added
+
+- **`fc setup [--install-dir PATH] [--model NAME]`** — first-run bootstrap. Resolves install.sh from: `$FIRECLAUDE_INSTALL_SH` env → npm global root → git repo root → URL download fallback.
+- **`fc start`** — start stopped containers (`docker compose up -d`).
+- **`fc stop`** — stop running containers (`docker compose stop`).
+- **`fc teardown [--purge]`** — stop + remove stack. `--purge` auto-answers yes to all prompts.
+- **`fc upgrade [--sha GIT_SHA]`** — pull latest fireclaude npm, optionally pin firecrawl to a new SHA, re-apply patches, rebuild api + playwright-service, restart.
+- **`fc version`** — print fireclaude version + installed firecrawl SHA + ollama models.
+- **`fc doctor [--json]`** — dep check (docker, compose, git, curl, jq, python3, node) + container health + model presence. `--json` returns `{deps, containers, models}` for agent consumption.
+- **`fc status --json`** — existing status command gains `--json` flag returning `[{service, state}]` array.
+- **Install dir fallback chain** — `fc` now auto-locates install dir via `FIRECRAWL_INSTALL_DIR` → `FIRECLAUDE_INSTALL_DIR` → `~/.fireclaude/firecrawl`. Applies to start/stop/status/teardown/upgrade/logs/model.
+- **README rewrite** — primary install is now `npm install -g fireclaude && fc setup`. curl-bash moved to collapsed `<details>` appendix. New CLI reference table. Agentic use section.
+- **CI update** — bootstrap step uses `npm install -g ./ && fc setup --install-dir /tmp/fc-ci --model llama3.2:3b` instead of direct `./install.sh`.
+- **Tests 10–12** — `fc version` semver check, `fc doctor --json` shape check, `fc status --json` shape check.
+
+### Backward compatible
+
+- `install.sh` still exists and is directly callable (curl-bash and git-clone flows preserved).
+- `FIRECRAWL_INSTALL_DIR` continues to work unchanged.
+- All v0.3.0 `fc` subcommands unchanged.
+
+---
+
 ## [0.3.0] — 2026-04-21 — rename to Fireclaude
 
 ### Changed
